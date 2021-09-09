@@ -12,7 +12,7 @@
 #define VBUS 	   ADC1_CHANNEL_7;				/* Pin of get voltage - GPIO35 		 		  */
 #define HOT_PIN    25							/* Pin of hot water - GPIO25         		  */
 #define COLD_PIN   26							/* Pin of cold water - GPIO26      	 		  */
-#define EXT_PW_PIN 16							/* Pin of monitoring external power - GPIO16  */
+#define EXT_PW_PIN 15							/* Pin of monitoring external power - GPIO16  */
 
 /* Name and Version */
 #define WEB_WATERMETER_FIRST_NAME "Water"
