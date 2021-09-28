@@ -20,6 +20,7 @@
 
 #include "esp_log.h"
 #include "mqtt_client.h"
+#include "esp_tls.h"
 
 #include "wm_config.h"
 #include "wm_mqtt.h"
@@ -29,18 +30,53 @@
 
 static const char *TAG = "watermeter_mqtt";
 
-static char topic_water[4][MQTT_TOPIC_SIZE];
+static char topic_water[topic_name_max][MQTT_TOPIC_SIZE];
 
 static esp_mqtt_client_handle_t client;
+static esp_mqtt_client_config_t mqtt_cfg;
 
 static uint8_t mqtt_count_disconnect;
 
 static bool connected = false;
 static bool saveNewConfig = false;
 static bool mqttFirstStart = true;
+static bool new_certificate = false;
+
+static char *mqtt_cert_pem = NULL;
 
 char *mqtt_get_topic(topic_name tn) {
 	return topic_water[tn];
+}
+
+static void mqtt_set_config() {
+
+	static char broker[MAX_MQTTBROKER+16];
+	char *p, *br = config_get_mqttBroker();
+
+	p = strstr(br, "://");
+
+	if (p) {
+		br = p+3;
+	}
+
+#if MQTT_SSL_ENABLE
+	sprintf(broker, "mqtts://%s", br);
+#else
+	sprintf(broker, "mqtt://%s", br);
+#endif
+
+
+
+	mqtt_cfg.uri = broker;
+	mqtt_cfg.port = MQTT_PORT;
+	mqtt_cfg.username = config_get_mqttUser();
+	mqtt_cfg.password = config_get_mqttPassword();
+#if MQTT_SSL_ENABLE
+	if (mqtt_cert_pem) free(mqtt_cert_pem);
+	mqtt_cert_pem = read_file(MQTTCERT_NAME);
+	mqtt_cfg.cert_pem = mqtt_cert_pem;
+#endif
+
 }
 
 static void mqtt_data(const char *topic, size_t topic_len, const char *data, size_t data_len) {
@@ -50,6 +86,23 @@ static void mqtt_data(const char *topic, size_t topic_len, const char *data, siz
 	uint32_t waterFromServer;
 	time_t timeFromServer;
 	uint8_t pos;
+	bool new_cert = false;
+
+	if (strstr(topic, END_TOPIC_CONTROL)) {
+		if (strstr(topic, CMD_HTTP_RESTART)) {
+			webserver_restart();
+			return;
+		} else if (strstr(topic, CMD_REBOOT)) {
+			PRINT("-- Rebooting ...\n");
+			vTaskDelay(500 / portTICK_PERIOD_MS);
+			esp_restart();
+		}
+#if MQTT_SSL_ENABLE
+		  else if(strstr(topic, CMD_NEW_CERT)) {
+			  new_cert = true;
+		}
+#endif
+	}
 
 	data_buf = malloc(data_len+1);
 
@@ -61,36 +114,55 @@ static void mqtt_data(const char *topic, size_t topic_len, const char *data, siz
 	memcpy(data_buf, data, data_len);
 	data_buf[data_len] = 0;
 
-	printf("-- %s ==> %.*s\n", data_buf, topic_len, topic);
+	if (!new_cert) PRINT("-- %s ==> %.*s\n", data_buf, topic_len, topic);
 
 	pos = strcspn(data_buf, " ");
 
 	if (pos != strlen(data_buf)) {
 
 		data_buf[pos] = 0;
-		timeFromServer = strtoul(data_buf, 0, 10);
+		if (!new_cert) timeFromServer = strtoul(data_buf, 0, 10);
 		p = data_buf + pos + 1;
-		waterFromServer = strtoul(p, 0, 10);
+		strtrim(p);
 
-		if (strstr(topic, END_TOPIC_HOT_IN)) {
-			if (strstr(p, snew)) {
-				config_set_hotWater(waterFromServer);
-				config_set_hotTime(timeFromServer);
-				saveNewConfig = true;
-			} else if (waterFromServer > config_get_hotWater()) {
-				config_set_hotWater(waterFromServer + config_get_litersPerPulse());
-				config_set_hotTime(timeFromServer);
-				saveNewConfig = true;
+		if (new_cert) {
+
+			new_cert = false;
+
+			if (strstr(p, CERT_START) && strstr(p, CERT_END)) {
+				if (write_file(MQTTCERT_NAME, p, strlen(p))) {
+					new_certificate = true;
+					free(data_buf);
+					return;
+				}
+			} else {
+				ESP_LOGE(TAG, "File from topic \"%s\" is not certificate.", topic_water[control]);
 			}
-		} else if (strstr(topic, END_TOPIC_COLD_IN)) {
-			if (strstr(p, snew)) {
-				config_set_coldWater(waterFromServer);
-				config_set_coldTime(timeFromServer);
-				saveNewConfig = true;
-			} else if (waterFromServer > config_get_coldWater()) {
-				config_set_coldWater(waterFromServer + config_get_litersPerPulse());
-				config_set_coldTime(timeFromServer);
-				saveNewConfig = true;
+
+		} else {
+
+			waterFromServer = strtoul(p, 0, 10);
+
+			if (strstr(topic, END_TOPIC_HOT_IN)) {
+				if (strstr(p, snew)) {
+					config_set_hotWater(waterFromServer);
+					config_set_hotTime(timeFromServer);
+					saveNewConfig = true;
+				} else if (waterFromServer > config_get_hotWater()) {
+					config_set_hotWater(waterFromServer + config_get_litersPerPulse());
+					config_set_hotTime(timeFromServer);
+					saveNewConfig = true;
+				}
+			} else if (strstr(topic, END_TOPIC_COLD_IN)) {
+				if (strstr(p, snew)) {
+					config_set_coldWater(waterFromServer);
+					config_set_coldTime(timeFromServer);
+					saveNewConfig = true;
+				} else if (waterFromServer > config_get_coldWater()) {
+					config_set_coldWater(waterFromServer + config_get_litersPerPulse());
+					config_set_coldTime(timeFromServer);
+					saveNewConfig = true;
+				}
 			}
 		}
 	}
@@ -114,14 +186,16 @@ static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event) {
 			mqtt_count_disconnect = 0;
 			connected = true;
 			if (mqttFirstStart) {
-				printf("-- Full name input topic for hot water:   %s\n", topic_water[hot_in]);
-				printf("-- Full name input topic for cold water:  %s\n", topic_water[cold_in]);
-				printf("-- Full name output topic for hot water:  %s\n", topic_water[hot_out]);
-				printf("-- Full name output topic for cold water: %s\n", topic_water[cold_out]);
+				PRINT("-- Full name input topic for hot water:   %s\n", topic_water[hot_in]);
+				PRINT("-- Full name input topic for cold water:  %s\n", topic_water[cold_in]);
+				PRINT("-- Full name input topic for control:     %s\n", topic_water[control]);
+				PRINT("-- Full name output topic for hot water:  %s\n", topic_water[hot_out]);
+				PRINT("-- Full name output topic for cold water: %s\n", topic_water[cold_out]);
 				mqttFirstStart = false;
 			}
 			esp_mqtt_client_subscribe(client, topic_water[hot_in], 0);
 			esp_mqtt_client_subscribe(client, topic_water[cold_in], 0);
+			esp_mqtt_client_subscribe(client, topic_water[control], 0);
 			break;
 		case MQTT_EVENT_DISCONNECTED:
 			ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
@@ -178,30 +252,43 @@ void mqtt_check_task(void *pvParameter) {
 
 	const TickType_t xDelay = 300 / portTICK_PERIOD_MS;
 	static uint8_t count = 0;
-	const uint8_t CMAX = 20;
+	const uint8_t CMAX = 200;
 
 	for(;;) {
-		if (!connected && staModeNow && !powerLow) {
-			if (count < CMAX) {
-				count++;
-			} else {
-				count = 0;
-				mqtt_restart();
+		if (staModeNow && !powerLow) {
+			if (!connected) {
+				if (count < CMAX) {
+					count++;
+				} else {
+					count = 0;
+					mqtt_restart();
+				}
+			} else count = 0;
+
+			if (new_certificate) {
+
+				PRINT("-- New certificate MQTT now\n");
+				new_certificate = false;
+				mqtt_set_config();
+				mqtt_stop();
+//				esp_mqtt_client_stop(client);
+				vTaskDelay(10000 / portTICK_PERIOD_MS);
+				mqtt_set_config();
+				esp_mqtt_set_config(client , &mqtt_cfg);
+				mqtt_start();
+//				esp_mqtt_client_start(client);
 			}
 		}
 		vTaskDelay(xDelay);
 	}
 }
 
+
 void mqtt_init() {
 
-	static char broker[MAX_MQTTBROKER+16];
-	const char *username = config_get_mqttUser();
-	const char *password = config_get_mqttPassword();
-	char *p, *br = config_get_mqttBroker();
 	uint8_t mac[6];
 
-	printf("-- Initializing mqtt client\n");
+	PRINT("-- Initializing mqtt client\n");
 
 	mqtt_count_disconnect = 0;
 
@@ -211,21 +298,9 @@ void mqtt_init() {
 	sprintf(topic_water[cold_in], DELIM MQTT_TOPIC "/%02X%02X%02X%02X%02X%02X/" END_TOPIC_COLD_IN, MAC2STR(mac));
 	sprintf(topic_water[hot_out], DELIM MQTT_TOPIC "/%02X%02X%02X%02X%02X%02X/" END_TOPIC_HOT_OUT, MAC2STR(mac));
 	sprintf(topic_water[cold_out], DELIM MQTT_TOPIC "/%02X%02X%02X%02X%02X%02X/" END_TOPIC_COLD_OUT, MAC2STR(mac));
+	sprintf(topic_water[control], DELIM MQTT_TOPIC "/%02X%02X%02X%02X%02X%02X/" END_TOPIC_CONTROL, MAC2STR(mac));
 
-	p = strstr(br, "://");
-
-	if (p) {
-		br = p+3;
-	}
-
-	sprintf(broker, "mqtt://%s", br);
-
-	esp_mqtt_client_config_t mqtt_cfg = {
-		.uri = broker,
-		.port = MQTT_PORT,
-		.username = username,
-		.password = password,
-	};
+	mqtt_set_config();
 
 	client = esp_mqtt_client_init(&mqtt_cfg);
 	esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, client);
@@ -255,41 +330,32 @@ void mqtt_restart() {
 }
 
 void mqtt_reinit() {
-	static char broker[MAX_MQTTBROKER+16];
-	const char *username = config_get_mqttUser();
-	const char *password = config_get_mqttPassword();
-	char *p, *br = config_get_mqttBroker();
-	uint8_t mac[6];
 
 	ESP_LOGI(TAG, "Reinit mqtt client");
 
 	mqtt_count_disconnect = 0;
 	mqttFirstStart = true;
 
-	esp_base_mac_addr_get(mac);
-
-	sprintf(topic_water[hot_in], DELIM MQTT_TOPIC "/%02X%02X%02X%02X%02X%02X/" END_TOPIC_HOT_IN, MAC2STR(mac));
-	sprintf(topic_water[cold_in], DELIM MQTT_TOPIC "/%02X%02X%02X%02X%02X%02X/" END_TOPIC_COLD_IN, MAC2STR(mac));
-	sprintf(topic_water[hot_out], DELIM MQTT_TOPIC "/%02X%02X%02X%02X%02X%02X/" END_TOPIC_HOT_OUT, MAC2STR(mac));
-	sprintf(topic_water[cold_out], DELIM MQTT_TOPIC "/%02X%02X%02X%02X%02X%02X/" END_TOPIC_COLD_OUT, MAC2STR(mac));
-
-	p = strstr(br, "://");
-
-	if (p) {
-		br = p+3;
-	}
-
-	sprintf(broker, "mqtt://%s", br);
-
-	esp_mqtt_client_config_t mqtt_cfg = {
-		.uri = broker,
-		.port = MQTT_PORT,
-		.username = username,
-		.password = password,
-	};
+	mqtt_set_config();
 
 	esp_mqtt_client_stop(client);
 	vTaskDelay(10000 / portTICK_PERIOD_MS);
 	esp_mqtt_set_config(client , &mqtt_cfg);
 	esp_mqtt_client_start(client);
+}
+
+bool mqtt_new_cert_from_webserver(const char *cert) {
+
+	bool ret = false;
+
+	if (strstr(cert, CERT_START) && strstr(cert, CERT_END)) {
+		if (write_file(MQTTCERT_NAME, cert, strlen(cert))) {
+			new_certificate = true;
+			ret = true;
+		}
+	} else {
+		ESP_LOGE(TAG, "Uploaded file is not certificate.");
+	}
+
+	return ret;
 }

@@ -3,8 +3,8 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" charset=utf-8>
-<meta charset="UTF-8">
-<meta http-equiv="refresh" content="15";URL="/"><title>%platform%. %modulename%</title>
+<meta http-equiv="refresh" content="15";URL="/">
+<title>%platform%. %modulename%</title>
 <style type="text/css">
 * {
 	margin: 0;

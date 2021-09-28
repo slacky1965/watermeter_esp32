@@ -4,6 +4,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" charset=utf-8>
 <title>%platform%. %modulename%</title>
 <style type="text/css">
+body {
+   color: #FFFFFF;
+   background-color: #000000;
+}
 @media (max-width: 1024px) {
   div#main {
     width: 100%%;
@@ -30,14 +34,3 @@
 }
 </style></head>
 <body>
-<p>Please upload firmware image *.bin file<p>
-<form method='POST' action='/update' enctype='multipart/form-data'>
-<input type='file' name='update'>
-<input type='submit' value='Update'></form>
-<p>Please upload certificate for MQTT *.pem file<p>
-<form method='POST' action='/updatecertmqtt' enctype='multipart/form-data'>
-<input type='file' name='updatecertmqtt'>
-<input type='submit' value='Update'></form>
-<p><a href="config">Return to Config</a></p>
-</body>
-</html>

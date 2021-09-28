@@ -9,27 +9,47 @@
 #include "mbedtls/base64.h"
 #include "esp_partition.h"
 #include "esp_ota_ops.h"
-
-
+#include "esp_tls.h"
+#include "esp_crt_bundle.h"
 
 #include "wm_config.h"
 #include "wm_utils.h"
 #include "wm_wifi.h"
 #include "wm_time.h"
 #include "wm_mqtt.h"
+#include "wm_httpd.h"
+#include "wm_log.h"
 
+/* Legal URL web server */
 #define	ROOT 		"/"
 #define	INDEX 		"/index"
 #define	CONFIG 		"/config"
 #define	UPLOAD 		"/upload"
 #define	UPDATE	 	"/update"
+#define LOG			"/log"
+#if MQTT_SSL_ENABLE
+#define	UPDATECERT 	"/updatecertmqtt"
+#endif
 #define SETTINGS	"/settings"
 #define OK			"/ok"
 
+/* Buffer for OTA load */
 #define OTA_BUF_LEN	1024
 
+/* Out log color */
+#define COLOR_E "<font color=#FF0000>"	/* error msg	- red		*/
+#define COLOR_W "<font color=#D2691E>"	/* warning msg	- chocolate	*/
+#define COLOR_I "<font color=#008000>"	/* info msg		- green		*/
+#define COLOR_D "<font color=#FFFF00>"	/* debug msg	- yellow	*/
+#define COLOR_V "<font color=#EE82EE>"	/* verbose		- violet, bad idea */
+
 static char *TAG = "watermeter_httpd";
-char *webserver_html_path = NULL;
+
+static char *webserver_html_path = NULL;
+static char *cacert = NULL;
+static char *prvtkey = NULL;
+
+static httpd_ssl_config_t config = HTTPD_SSL_CONFIG_DEFAULT();
 
 static bool rebootNow = false;
 static bool restartWiFi = false;
@@ -37,9 +57,12 @@ static bool defaultConfig = false;
 static bool saveNewConfig = false;
 static bool mqttRestart = false;
 static bool sntpReInit = false;
+static bool restartWebServer = false;
 
 static esp_err_t webserver_response(httpd_req_t *req);
 static esp_err_t webserver_update(httpd_req_t *req);
+static esp_err_t webserver_update_cert_mqtt(httpd_req_t *req);
+static esp_err_t webserver_log(httpd_req_t *req);
 
 static const httpd_uri_t root_tpl = {
     .uri       = ROOT,
@@ -75,6 +98,22 @@ static const httpd_uri_t update_tpl = {
     .handler   = webserver_update,
     .user_ctx  = NULL
 };
+
+static const httpd_uri_t log = {
+    .uri       = LOG,
+    .method    = HTTP_GET,
+    .handler   = webserver_log,
+    .user_ctx  = NULL
+};
+
+#if MQTT_SSL_ENABLE
+static const httpd_uri_t updatecertmqtt_tpl = {
+    .uri       = UPDATECERT,
+    .method    = HTTP_POST,
+    .handler   = webserver_update_cert_mqtt,
+    .user_ctx  = NULL
+};
+#endif
 
 static const httpd_uri_t settings_tpl = {
     .uri       = SETTINGS,
@@ -225,7 +264,7 @@ static bool webserver_authenticate(httpd_req_t *req) {
     if (buf_len > 1) {
     	buf = malloc(buf_len);
     	if (!buf) {
-    		ESP_LOGE(TAG, "Allocation memory esrror");
+    		ESP_LOGE(TAG, "Allocation memory error");
     		return false;
     	}
     	if (httpd_req_get_hdr_value_str(req, auth, buf, buf_len) == ESP_OK) {
@@ -448,7 +487,7 @@ static void webserver_parse_settings_uri(httpd_req_t *req) {
 		defaultConfig = false;
 		removeConfig();
 		if (rebootNow) {
-			printf("-- Rebooting ...\n");
+			PRINT("-- Rebooting ...\n");
 			vTaskDelay(500 / portTICK_PERIOD_MS);
 			esp_restart();
 		}
@@ -542,7 +581,7 @@ static void webserver_parse_settings_uri(httpd_req_t *req) {
 	}
 
 	if (rebootNow) {
-		printf("-- Rebooting ...\n");
+		PRINT("-- Rebooting ...\n");
 		vTaskDelay(500 / portTICK_PERIOD_MS);
 		esp_restart();
 	}
@@ -550,30 +589,11 @@ static void webserver_parse_settings_uri(httpd_req_t *req) {
 
 }
 
-static esp_err_t webserver_response(httpd_req_t *req) {
+static esp_err_t webserver_read_tpl(httpd_req_t *req) {
 
 	char *e = NULL, *subst_token = NULL, token[64], buff[1025];
 	size_t size;
 	int i, pos, sp = 0;
-
-	ESP_LOGI(TAG, "Request URI \"%s\"", req->uri);
-
-	if (strcmp(req->uri, ROOT) == 0) strcpy((char*) req->uri, INDEX);
-
-	if (firstStart && strcmp(req->uri, INDEX) == 0)
-		return webserver_redirect(req, CONFIG);
-
-	if (config_get_fullSecurity() || (config_get_configSecurity() && strcmp(req->uri, INDEX) != 0)) {
-		if (!webserver_authenticate(req)) {
-			webserver_requestAuthentication(req);
-			return ESP_OK;
-		}
-	}
-
-	if (strncmp(req->uri, SETTINGS, strlen(SETTINGS)) == 0) {
-		webserver_parse_settings_uri(req);
-		strcpy((char*)req->uri, OK);
-	}
 
 	sprintf(buff, "%s%s.tpl", webserver_html_path, req->uri);
 
@@ -632,13 +652,97 @@ static esp_err_t webserver_response(httpd_req_t *req) {
 		}
 	} while (size == sizeof(buff)-1);
 
-	httpd_resp_sendstr_chunk(req, NULL);
-
 
 	fclose(f);
 
 	return ESP_OK;
 }
+
+static esp_err_t webserver_response(httpd_req_t *req) {
+
+	ESP_LOGI(TAG, "Request URI \"%s\"", req->uri);
+
+	if (strcmp(req->uri, ROOT) == 0) strcpy((char*) req->uri, INDEX);
+
+	if (firstStart && strcmp(req->uri, INDEX) == 0)
+		return webserver_redirect(req, CONFIG);
+
+	if (config_get_fullSecurity() || (config_get_configSecurity() && strcmp(req->uri, INDEX) != 0)) {
+		if (!webserver_authenticate(req)) {
+			webserver_requestAuthentication(req);
+			return ESP_OK;
+		}
+	}
+
+	if (strncmp(req->uri, SETTINGS, strlen(SETTINGS)) == 0) {
+		webserver_parse_settings_uri(req);
+		strcpy((char*)req->uri, OK);
+	}
+
+	esp_err_t ret = webserver_read_tpl(req);
+
+	httpd_resp_sendstr_chunk(req, NULL);
+
+	return ret;
+}
+
+static esp_err_t webserver_update_cert_mqtt(httpd_req_t *req) {
+	esp_err_t ret = ESP_FAIL;
+	char *buff = NULL;
+	char *err = NULL;
+	const char *hdr_end = "\r\n\r\n";
+	size_t len;
+
+	if (req->content_len > MAX_BUFF_RW+300) {
+		err = "Certificate file too large";
+	}
+
+	if (!err) {
+		buff = malloc(req->content_len+1);
+		if (!buff) {
+	        err = "Error allocation memory";
+		} else {
+			len = httpd_req_recv(req, buff, req->content_len);
+			if (len != req->content_len) {
+				err = "Eror upload certificate";
+			} else {
+				char *pos = strstr(buff, hdr_end) + strlen(hdr_end);
+				if (!pos) {
+					err = "Invalid content type";
+				} else {
+					strtrim(pos);
+					char *p = strstr(pos, CERT_END);
+					if (!p) {
+						err = "Uploaded file not sertificate";
+					} else {
+						p[strlen(CERT_END)+1] = 0;
+						if (strlen(pos) >= MAX_BUFF_RW) {
+							err = "Certificate file too large";
+						} else if (!mqtt_new_cert_from_webserver(pos)) {
+							err = "Uploaded file not sertificate";
+						} else {
+							ret = ESP_OK;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	char err_buff[128];
+    if (ret == ESP_OK && !err) {
+        sprintf(err_buff, "Success. New certificate MQTT is loaded\r\n");
+        httpd_resp_sendstr(req, err_buff);
+    } else {
+        sprintf(err_buff, "%s. Error code: 0x%x\r\n", err, ret);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, err_buff);
+    }
+
+    if (buff) free(buff);
+
+	return ESP_OK;
+}
+
 
 static esp_err_t webserver_update(httpd_req_t *req) {
 
@@ -669,7 +773,7 @@ static esp_err_t webserver_update(httpd_req_t *req) {
 		if (partition->size < req->content_len) {
 			err = "Firmware image too large";
 			ret = ESP_FAIL;
-//			printf("part_size: %d, cont_len: %d\n", partition->size, req->content_len);
+//			PRINT("part_size: %d, cont_len: %d\n", partition->size, req->content_len);
 		}
 
 		if (!err) {
@@ -689,9 +793,9 @@ static esp_err_t webserver_update(httpd_req_t *req) {
 							}
 
 
-							printf("-- Writing to partition name \"%s\" subtype %d at offset 0x%x\n",
+							PRINT("-- Writing to partition name \"%s\" subtype %d at offset 0x%x\n",
 									partition->label, partition->subtype, partition->address);
-							printf("-- Please wait");
+							PRINT("-- Please wait");
 							vTaskDelay(1000 / portTICK_PERIOD_MS);
 
 							size_t plen = len - (pos - buf);
@@ -721,11 +825,11 @@ static esp_err_t webserver_update(httpd_req_t *req) {
 							global_cont_len -= len;
 						}
 					}
-					printf(".");
+					PRINT(".");
 					fflush (stdout);
 				}
 
-				printf("\n-- Binary transferred finished: %d bytes\n",
+				PRINT("\n-- Binary transferred finished: %d bytes\n",
 						global_recv_len);
 
 				ret = esp_ota_end(ota_handle);
@@ -763,9 +867,9 @@ static esp_err_t webserver_update(httpd_req_t *req) {
 		esp_wifi_disconnect();
 
 		const esp_partition_t *boot_partition = esp_ota_get_boot_partition();
-		printf("-- Next boot partition \"%s\" name subtype %d at offset 0x%x\n",
+		PRINT("-- Next boot partition \"%s\" name subtype %d at offset 0x%x\n",
 				boot_partition->label, boot_partition->subtype, boot_partition->address);
-		printf("-- Prepare to restart system!\n--\n--\n\n");
+		PRINT("-- Prepare to restart system!\n--\n--\n\n");
 
 		vTaskDelay(2000 / portTICK_PERIOD_MS);
 
@@ -777,19 +881,89 @@ static esp_err_t webserver_update(httpd_req_t *req) {
 	return ESP_OK;
 }
 
+static esp_err_t webserver_log(httpd_req_t *req) {
+
+	esp_err_t ret = ESP_FAIL;
+	const char *end_doc   = "</body></html>";
+	const char *end_color = "</font>";
+	const char *enter = "<br/>\n";
+
+	ESP_LOGI(TAG, "Request URI \"%s\"", req->uri);
+
+	lstack_elem_t *lstack = get_lstack();
+
+	ret = webserver_read_tpl(req);
+
+	if (ret == ESP_FAIL) {
+		return ret;
+	}
+
+
+	if (!lstack) {
+		const char resp[] = "Not log file<br/>\n";
+		httpd_resp_send(req, resp, HTTPD_RESP_USE_STRLEN);
+	} else {
+		bool color;
+		while(lstack) {
+			color = false;
+			if (lstack->str) {
+				switch(*(lstack->str)) {
+					case	'E':
+						color = true;
+						httpd_resp_send_chunk(req, COLOR_E, HTTPD_RESP_USE_STRLEN);
+						break;
+					case	'W':
+						color = true;
+						httpd_resp_send_chunk(req, COLOR_W, HTTPD_RESP_USE_STRLEN);
+						break;
+					case	'I':
+						color = true;
+						httpd_resp_send_chunk(req, COLOR_I, HTTPD_RESP_USE_STRLEN);
+						break;
+					case	'D':
+						color = true;
+						httpd_resp_send_chunk(req, COLOR_D, HTTPD_RESP_USE_STRLEN);
+						break;
+					case	'V':
+						color = true;
+						httpd_resp_send_chunk(req, COLOR_V, HTTPD_RESP_USE_STRLEN);
+						break;
+					default:
+						break;
+				}
+				httpd_resp_send_chunk(req, lstack->str, HTTPD_RESP_USE_STRLEN);
+				if (color) {
+					httpd_resp_send_chunk(req, end_color, HTTPD_RESP_USE_STRLEN);
+				}
+				httpd_resp_send_chunk(req, enter, HTTPD_RESP_USE_STRLEN);
+			}
+
+			lstack = lstack->next;
+		}
+		httpd_resp_send_chunk(req, end_doc, HTTPD_RESP_USE_STRLEN);
+		httpd_resp_sendstr_chunk(req, NULL);
+	}
+
+	return ESP_OK;
+}
+
+void webserver_restart() {
+	restartWebServer = true;
+}
+
 static httpd_handle_t webserver_start(void) {
+
 	httpd_handle_t server = NULL;
-    httpd_ssl_config_t config = HTTPD_SSL_CONFIG_DEFAULT();
 
-    extern const unsigned char cacert_pem_start[] asm("_binary_cacert_pem_start");
-    extern const unsigned char cacert_pem_end[]   asm("_binary_cacert_pem_end");
-    config.cacert_pem = cacert_pem_start;
-    config.cacert_len = cacert_pem_end - cacert_pem_start;
+	if (cacert) {
+		config.cacert_pem = (uint8_t*)cacert;
+		config.cacert_len = strlen(cacert)+1;
+	}
 
-    extern const unsigned char prvtkey_pem_start[] asm("_binary_prvtkey_pem_start");
-    extern const unsigned char prvtkey_pem_end[]   asm("_binary_prvtkey_pem_end");
-    config.prvtkey_pem = prvtkey_pem_start;
-    config.prvtkey_len = prvtkey_pem_end - prvtkey_pem_start;
+	if (prvtkey) {
+		config.prvtkey_pem = (uint8_t*)prvtkey;
+		config.prvtkey_len = strlen(prvtkey)+1;
+	}
 
 	ESP_LOGI(TAG, "Starting webserver");
 
@@ -801,6 +975,10 @@ static httpd_handle_t webserver_start(void) {
 		httpd_register_uri_handler(server, &config_tpl);
 		httpd_register_uri_handler(server, &upload_tpl);
 		httpd_register_uri_handler(server, &update_tpl);
+		httpd_register_uri_handler(server, &log);
+#if MQTT_SSL_ENABLE
+		httpd_register_uri_handler(server, &updatecertmqtt_tpl);
+#endif
 		httpd_register_uri_handler(server, &settings_tpl);
 		httpd_register_uri_handler(server, &ok_tpl);
 		return server;
@@ -813,7 +991,7 @@ static httpd_handle_t webserver_start(void) {
 static void webserver_stop(httpd_handle_t server)
 {
     // Stop the httpd server
-    httpd_stop(server);
+    httpd_ssl_stop(server);
 }
 
 
@@ -834,13 +1012,47 @@ static void webserver_connect_handler(void* arg, esp_event_base_t event_base, in
     }
 }
 
+static void http_check_task(void *pvparameters)
+{
 
+	static uint8_t count = 0;
+
+	httpd_handle_t* server = (httpd_handle_t*) pvparameters;
+
+    vTaskDelay(3000 / portTICK_PERIOD_MS);
+
+	for (;;) {
+		if (staApModeNow || staModeNow || apModeNow) {
+			if (restartWebServer) {
+				PRINT("-- Restart webserver\n");
+				if (*server) {
+					webserver_stop(*server);
+					*server = NULL;
+				    vTaskDelay(1000 / portTICK_PERIOD_MS);
+				}
+				restartWebServer = false;
+				*server = webserver_start();
+			}
+			if (*server == NULL) {
+				count++;
+				if (count == 20) {
+					*server = webserver_start();
+					count = 0;
+				}
+			} else {
+				count = 0;
+			}
+	    }
+	    vTaskDelay(2000 / portTICK_PERIOD_MS);
+	}
+    vTaskDelete(NULL);
+}
 
 void webserver_init(const char *html_path) {
 
 	static httpd_handle_t server = NULL;
 
-	printf("-- Initializing webserver. Please use prefix https://...\n");
+	PRINT("-- Initializing webserver. Please use prefix https://...\n");
 
 	webserver_html_path = malloc(strlen(html_path)+1);
 
@@ -851,8 +1063,12 @@ void webserver_init(const char *html_path) {
 
 	strcpy(webserver_html_path, html_path);
 
+	cacert = read_file(CACERT_NAME);
+	prvtkey = read_file(PRVTKEY_NAME);
+
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &webserver_connect_handler, &server));
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_AP_STAIPASSIGNED, &webserver_connect_handler, &server));
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &webserver_disconnect_handler, &server));
 
+    xTaskCreate(&http_check_task, "http_check_task", 2048, &server, 0, NULL);
 }

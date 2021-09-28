@@ -12,7 +12,7 @@
 #define AP_PASSWORD "12345678"                   /* Password WiFi AP Mode             */
 #define MQTT_USER "test"                         /* mqtt user                         */
 #define MQTT_PASSWORD "1111"                     /* mqtt password                     */
-#define MQTT_BROKER "192.168.1.1"                /* URL mqtt broker                   */
+#define MQTT_BROKER "192.168.1.1"			     /* URL mqtt broker                   */
 #define MQTT_TOPIC "WaterMeter"                  /* Primary mqtt topic name           */
 #define LITERS_PER_PULSE 10                      /* How many liters per one pulse     */
 #define TIME_ZONE 3                              /* Default Time Zone                 */

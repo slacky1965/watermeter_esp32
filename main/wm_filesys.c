@@ -25,7 +25,7 @@ esp_vfs_spiffs_conf_t conf = {
 
 void init_spiffs() {
 
-    printf("-- Initializing SPIFFS\n");
+    PRINT("-- Initializing SPIFFS\n");
 
     spiffs =  true;
 
@@ -51,7 +51,7 @@ void init_sdcard() {
 
     esp_err_t ret;
 
-    printf("-- Initializing SD card\n");
+    PRINT("-- Initializing SD card\n");
 
     ESP_LOGI(TAG, "Using SPI peripheral");
 

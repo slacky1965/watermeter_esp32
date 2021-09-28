@@ -2,7 +2,6 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" charset=utf-8>
-<meta charset="UTF-8">
 <title>%platform%. %modulename%</title>
 <style type="text/css">
 * {
@@ -292,7 +291,8 @@ button.settings-button {
 Set config
 </button></p>
 <p><a href="/">Main</a>
-<a href="/upload">Update Firmware</a></p>
+<a href="/upload">Update Firmware</a>
+<a href="/log">Log</a></p>
 </p>
 </td>
 </tr>

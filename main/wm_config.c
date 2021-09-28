@@ -127,51 +127,51 @@ void setConfig(watermeter_config_t *config) {
 }
 
 
-void printConfig() {
-	printf("webAdminLogin: \"%s\"\n", watermeter_config.webAdminLogin);
-	printf("webAdminPassword: \"%s\"\n", watermeter_config.webAdminPassword);
-	printf("fullSecurity: %s\n", watermeter_config.fullSecurity?"true":"false");
-	printf("configSecurity: %s\n", watermeter_config.configSecurity?"true":"false");
-	printf("staSsid: \"%s\"\n", watermeter_config.staSsid);
-	printf("staPassword: \"%s\"\n", watermeter_config.staPassword);
-	printf("apMode: %s\n", watermeter_config.apMode?"true":"false");
-	printf("apSsid: \"%s\"\n", watermeter_config.apSsid);
-	printf("apPassword: \"%s\"\n", watermeter_config.apPassword);
-	printf("mqttBroker: \"%s\"\n", watermeter_config.mqttBroker);
-	printf("mqttUser: \"%s\"\n", watermeter_config.mqttUser);
-	printf("mqttPassword: \"%s\"\n", watermeter_config.mqttPassword);
-	printf("mqttTopic: \"%s\"\n", watermeter_config.mqttTopic);
-	printf("ntpServerName: \"%s\"\n", watermeter_config.ntpServerName);
-	printf("timeZone: %d\n", watermeter_config.timeZone);
-	printf("litersPerPulse: %d\n", watermeter_config.litersPerPulse);
-	printf("hotTime: %ld\n", watermeter_config.hotTime);
-	printf("coldTime: %ld\n", watermeter_config.coldTime);
-	printf("hotWater: %d\n", watermeter_config.hotWater);
-	printf("coldWater: %d\n", watermeter_config.coldWater);
-}
-
-void printTMPConfig(watermeter_config_t *config) {
-	printf("webAdminLogin: \"%s\"\n", config->webAdminLogin);
-	printf("webAdminPassword: \"%s\"\n", config->webAdminPassword);
-	printf("fullSecurity: %s\n", config->fullSecurity?"true":"false");
-	printf("configSecurity: %s\n", config->configSecurity?"true":"false");
-	printf("staSsid: \"%s\"\n", config->staSsid);
-	printf("staPassword: \"%s\"\n", config->staPassword);
-	printf("apMode: %s\n", config->apMode?"true":"false");
-	printf("apSsid: \"%s\"\n", config->apSsid);
-	printf("apPassword: \"%s\"\n", config->apPassword);
-	printf("mqttBroker: \"%s\"\n", config->mqttBroker);
-	printf("mqttUser: \"%s\"\n", config->mqttUser);
-	printf("mqttPassword: \"%s\"\n", config->mqttPassword);
-	printf("mqttTopic: \"%s\"\n", config->mqttTopic);
-	printf("ntpServerName: \"%s\"\n", config->ntpServerName);
-	printf("timeZone: %d\n", config->timeZone);
-	printf("litersPerPulse: %d\n", config->litersPerPulse);
-	printf("hotTime: %ld\n", config->hotTime);
-	printf("coldTime: %ld\n", config->coldTime);
-	printf("hotWater: %d\n", config->hotWater);
-	printf("coldWater: %d\n", config->coldWater);
-}
+//void printConfig() {
+//	printf("webAdminLogin: \"%s\"\n", watermeter_config.webAdminLogin);
+//	printf("webAdminPassword: \"%s\"\n", watermeter_config.webAdminPassword);
+//	printf("fullSecurity: %s\n", watermeter_config.fullSecurity?"true":"false");
+//	printf("configSecurity: %s\n", watermeter_config.configSecurity?"true":"false");
+//	printf("staSsid: \"%s\"\n", watermeter_config.staSsid);
+//	printf("staPassword: \"%s\"\n", watermeter_config.staPassword);
+//	printf("apMode: %s\n", watermeter_config.apMode?"true":"false");
+//	printf("apSsid: \"%s\"\n", watermeter_config.apSsid);
+//	printf("apPassword: \"%s\"\n", watermeter_config.apPassword);
+//	printf("mqttBroker: \"%s\"\n", watermeter_config.mqttBroker);
+//	printf("mqttUser: \"%s\"\n", watermeter_config.mqttUser);
+//	printf("mqttPassword: \"%s\"\n", watermeter_config.mqttPassword);
+//	printf("mqttTopic: \"%s\"\n", watermeter_config.mqttTopic);
+//	printf("ntpServerName: \"%s\"\n", watermeter_config.ntpServerName);
+//	printf("timeZone: %d\n", watermeter_config.timeZone);
+//	printf("litersPerPulse: %d\n", watermeter_config.litersPerPulse);
+//	printf("hotTime: %ld\n", watermeter_config.hotTime);
+//	printf("coldTime: %ld\n", watermeter_config.coldTime);
+//	printf("hotWater: %d\n", watermeter_config.hotWater);
+//	printf("coldWater: %d\n", watermeter_config.coldWater);
+//}
+//
+//void printTMPConfig(watermeter_config_t *config) {
+//	printf("webAdminLogin: \"%s\"\n", config->webAdminLogin);
+//	printf("webAdminPassword: \"%s\"\n", config->webAdminPassword);
+//	printf("fullSecurity: %s\n", config->fullSecurity?"true":"false");
+//	printf("configSecurity: %s\n", config->configSecurity?"true":"false");
+//	printf("staSsid: \"%s\"\n", config->staSsid);
+//	printf("staPassword: \"%s\"\n", config->staPassword);
+//	printf("apMode: %s\n", config->apMode?"true":"false");
+//	printf("apSsid: \"%s\"\n", config->apSsid);
+//	printf("apPassword: \"%s\"\n", config->apPassword);
+//	printf("mqttBroker: \"%s\"\n", config->mqttBroker);
+//	printf("mqttUser: \"%s\"\n", config->mqttUser);
+//	printf("mqttPassword: \"%s\"\n", config->mqttPassword);
+//	printf("mqttTopic: \"%s\"\n", config->mqttTopic);
+//	printf("ntpServerName: \"%s\"\n", config->ntpServerName);
+//	printf("timeZone: %d\n", config->timeZone);
+//	printf("litersPerPulse: %d\n", config->litersPerPulse);
+//	printf("hotTime: %ld\n", config->hotTime);
+//	printf("coldTime: %ld\n", config->coldTime);
+//	printf("hotWater: %d\n", config->hotWater);
+//	printf("coldWater: %d\n", config->coldWater);
+//}
 
 void removeConfig() {
 
@@ -224,7 +224,7 @@ bool readConfig() {
 			if (watermeter_config.staSsid[0] != 0)
 				staConfigure = true;
 			ret = true;
-			printf("-- Config is read from \"%s\" file\n", configFileName);
+			PRINT("-- Config is read from \"%s\" file\n", configFileName);
 		} else {
 			ESP_LOGE(TAG, "Config file \"%s\" read error!", configFileName);
 		}
@@ -259,7 +259,7 @@ void saveConfig() {
 				return;
 			}
 			fclose(file);
-			printf("-- Save config to %s file\n", configFileName);
+			PRINT("-- Save config to %s file\n", configFileName);
 		} else
 			ESP_LOGE(TAG, "Config file \"%s\" write error!", configFileName);
 	} else {
@@ -268,7 +268,7 @@ void saveConfig() {
 }
 
 void set_configFileName (char *path) {
-	sprintf(configFileName, "%s/%s", path, WM_CONFIG_FILE);
+	sprintf(configFileName, "%s%s%s", path, DELIM, WM_CONFIG_FILE);
 }
 
 char *config_get_webAdminLogin() {

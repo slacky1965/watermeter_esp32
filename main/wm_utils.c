@@ -13,17 +13,19 @@
 #include "wm_config.h"
 #include "wm_wifi.h"
 #include "wm_mqtt.h"
+#include "wm_log.h"
 
 #define DEFAULT_VREF    			1100
 #define SLEEP_COUNT_MAX				5
 
 
-//static const char *TAG = "watermeter_util";
+static const char *TAG = "watermeter_util";
 static int sleep_count = 0;
 
 void reset_sleep_count() {
 	sleep_count = 0;
 }
+
 
 static void light_sleep_task(void *pvParameter) {
 
@@ -40,26 +42,26 @@ static void light_sleep_task(void *pvParameter) {
 			powerLow = true;
 			if (sleep_count < SLEEP_COUNT_MAX) {
 				if (sleep_count == 0) {
-					printf("-- Power low! Preparing for sleep light mode.\n");
+					PRINT("-- Power low! Preparing for sleep light mode.\n");
 				}
 				sleep_count++;
 			} else {
 				sleepNow = true;
 				if (!dontSleep) {
-					printf("-- Light sleep set now!\n");
+					PRINT("-- Light sleep set now!\n");
 					mqtt_stop();
 					esp_wifi_stop();
 				    vTaskDelay(1000 / portTICK_PERIOD_MS);
 			        esp_sleep_enable_gpio_wakeup();
 			        esp_light_sleep_start();
 			        sleep_count = 1;
-			        printf("-- Awoke from a light sleep\n");
+			        PRINT("-- Awoke from a light sleep\n");
 				}
 			}
 		} else {
 			powerLow = false;
 			if (sleep_count != 0) {
-				printf("-- External power high.\n");
+				PRINT("-- External power high.\n");
 				sleepNow = false;
 				sleep_count = 0;
 				esp_wifi_start();
@@ -124,5 +126,149 @@ char *getVoltage() {
 	return buf;
 }
 
+void strtrim(char *s) {
 
+	/* With begin */
+	int i = 0, j;
+	while ((s[i] == ' ') || (s[i] == '\t')) {
+		i++;
+	}
+	if (i > 0) {
+		for (j = 0; j < strlen(s); j++) {
+			s[j] = s[j + i];
+		}
+		s[j] = '\0';
+	}
+
+	/* With end */
+	i = strlen(s) - 1;
+	while ((s[i] == ' ') || (s[i] == '\t')) { /* || (s[i] == '\r') || (s[i] == '\n') */
+		i--;
+	}
+	if (i < (strlen(s) - 1)) {
+		s[i + 1] = '\0';
+	}
+}
+
+char *read_file(const char *fileName) {
+
+	char *rbuff = NULL;
+	FILE *fp;
+	size_t flen;
+
+	if (sdcard || spiffs) {
+		fp = fopen(fileName, "rb");
+		if (fp) {
+			fseek(fp, 0, SEEK_END);
+			flen = ftell(fp);
+
+			if (flen > 1) {
+				if (flen >= MAX_BUFF_RW) {
+					ESP_LOGE(TAG, "The file size is too large. \"%s\" len - %u, more, than %u", fileName, flen, MAX_BUFF_RW);
+					fclose(fp);
+					return NULL;
+				}
+			} else {
+				ESP_LOGE(TAG, "Empty file - \"%s\"", fileName);
+				fclose(fp);
+				return NULL;
+			}
+
+			rewind(fp);
+
+			rbuff = malloc(flen+1);
+
+			if (rbuff == NULL) {
+				ESP_LOGE(TAG, "Error allocation memory");
+				fclose(fp);
+				return NULL;
+			}
+
+			memset(rbuff, 0, flen+1);
+
+			if (fread(rbuff, sizeof(uint8_t), flen, fp) != flen) {
+				ESP_LOGE(TAG, "File \"%s\" read error from %s", fileName, sdcard ? "sdcard" : "spiffs");
+				fclose(fp);
+				free(rbuff);
+				return NULL;
+			}
+
+			fclose(fp);
+
+		} else {
+			ESP_LOGE(TAG, "Cannot open file \"%s\"", fileName);
+		}
+	} else {
+		ESP_LOGE(TAG, "Not initializing sdcard or spiffs");
+	}
+
+	return rbuff;
+}
+
+bool write_file(const char *fileName, const char *wbuff, size_t flen) {
+
+	FILE *fp;
+	bool ret = false;
+
+	if (sdcard || spiffs) {
+		fp = fopen(fileName, "wb");
+		if (fp) {
+			fseek(fp, 0, SEEK_SET);
+			if (fwrite(wbuff, sizeof(uint8_t), flen, fp) != flen) {
+				ESP_LOGE(TAG, "File \"%s\" write error to %s", fileName, sdcard ? "sdcard" : "spiffs");
+				fclose(fp);
+				return ret;
+			}
+			ret = true;
+			fclose(fp);
+
+		} else {
+			ESP_LOGE(TAG, "Cannot open file \"%s\"", fileName);
+		}
+	} else {
+		ESP_LOGE(TAG, "Not initializing sdcard or spiffs");
+	}
+
+	return ret;
+}
+
+
+int my_printf(const char *frm, ...) {
+
+	va_list args;
+	char *buff;
+	int len = 0;
+
+	va_start(args, frm);
+
+	len = vasprintf(&buff, frm, args);
+
+	va_end(args);
+
+	if (buff == NULL) return 0;
+
+	printf(buff);
+
+	write_to_lstack(buff);
+
+	return len;
+}
+
+
+
+int my_vprintf(const char *frm, va_list args) {
+
+	char *buff;
+	int len = 0;
+
+	len = vasprintf(&buff, frm, args);
+
+	if (buff == NULL) return 0;
+
+	printf(buff);
+
+	write_to_lstack(buff);
+
+	return len;
+}
 
