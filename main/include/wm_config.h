@@ -17,8 +17,6 @@
 #define LITERS_PER_PULSE 10                      /* How many liters per one pulse     */
 #define TIME_ZONE 3                              /* Default Time Zone                 */
 
-
-
 #define MAX_WEBADMINLOGIN		16
 #define MAX_WEBADMINPASSWORD	16
 #define MAX_STASSID				16

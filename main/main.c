@@ -18,7 +18,7 @@
 #include "wm_pulse.h"
 #include "wm_log.h"
 
-static char *TAG = "watermeter_main";
+//static char *TAG = "watermeter_main";
 
 /* sharing flags */
 bool sleepNow;
@@ -161,11 +161,10 @@ void app_main(void) {
 		set_configFileName(MOUNT_POINT_SPIFFS);
 	}
 
-
 	if (!readConfig()) {
 		firstStart = true;
+		saveConfig();
 	}
-
 
 	pulse_init();
 

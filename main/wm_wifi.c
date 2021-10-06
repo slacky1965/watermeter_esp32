@@ -64,7 +64,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t e
         ESP_LOGI(TAG,"Connect to the station \"%s\" fail", config_get_staSsid());
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
-        PRINT("-- Station mode got ip:" IPSTR "\n", IP2STR(&event->ip_info.ip));
+        PRINT("-- Station mode. Please go to https://" IPSTR "\n", IP2STR(&event->ip_info.ip));
         ip_info = event->ip_info;
         s_retry_num = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
@@ -180,12 +180,16 @@ void startWiFiSTA_AP() {
 
     ESP_ERROR_CHECK(esp_wifi_stop());
 
-	ESP_ERROR_CHECK(esp_wifi_get_config(WIFI_IF_AP, &ap_config));
-	ESP_ERROR_CHECK(esp_wifi_get_config(WIFI_IF_STA, &sta_config));
+//	ESP_ERROR_CHECK(esp_wifi_get_config(WIFI_IF_AP, &ap_config));
+//	ESP_ERROR_CHECK(esp_wifi_get_config(WIFI_IF_STA, &sta_config));
+	memset(&ap_config, 0, sizeof(wifi_config_t));
+	memset(&sta_config, 0, sizeof(wifi_config_t));
 
 	strcpy((char*)&(ap_config.ap.ssid), config_get_apSsid());
 	strcpy((char*)&(ap_config.ap.password), config_get_apPassword());
-	ap_config.ap.ssid_len = strlen(config_get_apSsid())+1;
+
+	ap_config.ap.ssid_len = 0;
+//	ap_config.ap.ssid_len = strlen(config_get_apSsid())+1;
 	ap_config.ap.authmode = WIFI_AUTH_WPA2_PSK;
 	ap_config.ap.max_connection = 5;
 
@@ -222,11 +226,13 @@ void startWiFiAP() {
 
     ESP_ERROR_CHECK(esp_wifi_stop());
 
-	ESP_ERROR_CHECK(esp_wifi_get_config(WIFI_IF_AP, &ap_config));
+//	ESP_ERROR_CHECK(esp_wifi_get_config(WIFI_IF_AP, &ap_config));
+	memset(&ap_config, 0, sizeof(wifi_config_t));
 
 	strcpy((char*)&(ap_config.ap.ssid), config_get_apSsid());
 	strcpy((char*)&(ap_config.ap.password), config_get_apPassword());
-	ap_config.ap.ssid_len = strlen(config_get_apSsid())+1;
+	ap_config.ap.ssid_len = 0;
+//	ap_config.ap.ssid_len = strlen(config_get_apSsid())+1;
 	ap_config.ap.authmode = WIFI_AUTH_WPA2_PSK;
 	ap_config.ap.max_connection = 5;
 
@@ -263,7 +269,8 @@ void startWiFiSTA() {
 	PRINT("-- Connecting to: %s\n", config_get_staSsid());
 
     ESP_ERROR_CHECK(esp_wifi_stop());
-	ESP_ERROR_CHECK(esp_wifi_get_config(WIFI_IF_STA, &sta_config));
+//	ESP_ERROR_CHECK(esp_wifi_get_config(WIFI_IF_STA, &sta_config));
+	memset(&sta_config, 0, sizeof(wifi_config_t));
 
 	strcpy((char*)&(sta_config.sta.ssid), config_get_staSsid());
 	strcpy((char*)&(sta_config.sta.password), config_get_staPassword());

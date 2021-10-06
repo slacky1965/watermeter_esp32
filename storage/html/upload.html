@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" charset=utf-8>
+<title>%platform%. %modulename%</title>
+<style type="text/css">
+div#main {
+	font: 14pt/12pt sans-serif;
+	text-align: center;
+	max-width: 1000px;
+	height: auto;
+	width: 35em;
+	margin: 1em auto 0;
+}
+@media (max-width: 1024px) {
+  div#main {
+    width: 100%%;
+    height: auto;
+    }
+}
+@media (max-width: 768px) {
+  div#main {
+    width: 100%%;
+    height: auto;
+  }
+}
+@media (max-width: 480px) {
+  div#main {
+    width: 100%%;
+    height: auto;
+  }
+}
+@media (max-width: 320px) {
+  div#main {
+    width: 100%%;
+    height: auto;
+  }
+}
+</style></head>
+<body>
+<div id="main">
+<p>Please upload firmware image *.bin file<p>
+<form method='POST' action='/update' enctype='multipart/form-data'>
+<input type='file' name='update'>
+<input type='submit' value='Update'></form>
+<p>Please upload certificate for MQTT *.pem file<p>
+<form method='POST' action='/updatecertmqtt' enctype='multipart/form-data'>
+<input type='file' name='updatecertmqtt'>
+<input type='submit' value='Upload cert file'></form>
+<p>Please upload html file<p>
+<form method='POST' action='/uploadhtml' enctype='multipart/form-data'>
+<input type='file' name='uploadhtml'>
+<input type='submit' value='Upload html file'></form>
+<p><a href="/config.html">Return to Config</a></p>
+</div>
+</body>
+</html>

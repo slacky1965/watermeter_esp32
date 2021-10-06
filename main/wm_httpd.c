@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <dirent.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -14,27 +15,33 @@
 
 #include "wm_config.h"
 #include "wm_utils.h"
+#include "wm_filesys.h"
 #include "wm_wifi.h"
 #include "wm_time.h"
 #include "wm_mqtt.h"
 #include "wm_httpd.h"
 #include "wm_log.h"
 
+/* Buffer for OTA and another load or read from spiffs */
+#define OTA_BUF_LEN	 1024
+
 /* Legal URL web server */
 #define	ROOT 		"/"
-#define	INDEX 		"/index"
-#define	CONFIG 		"/config"
-#define	UPLOAD 		"/upload"
+#define	INDEX 		"/index.html"
+#define	CONFIG 		"/config.html"
+#define	UPLOAD 		"/upload.html"
+#define	UPLHTML 	"/uploadhtml"
 #define	UPDATE	 	"/update"
-#define LOG			"/log"
+#define LOG			"/log.html"
 #if MQTT_SSL_ENABLE
 #define	UPDATECERT 	"/updatecertmqtt"
 #endif
-#define SETTINGS	"/settings"
-#define OK			"/ok"
+#define SETTINGS	"/settings.html"
+#define OK			"/ok.html"
 
-/* Buffer for OTA load */
-#define OTA_BUF_LEN	1024
+/* File extension */
+#define TPL			".tpl"
+#define HTML		".html"
 
 /* Out log color */
 #define COLOR_E "<font color=#FF0000>"	/* error msg	- red		*/
@@ -49,8 +56,6 @@ static char *webserver_html_path = NULL;
 static char *cacert = NULL;
 static char *prvtkey = NULL;
 
-static httpd_ssl_config_t config = HTTPD_SSL_CONFIG_DEFAULT();
-
 static bool rebootNow = false;
 static bool restartWiFi = false;
 static bool defaultConfig = false;
@@ -61,45 +66,53 @@ static bool restartWebServer = false;
 
 static esp_err_t webserver_response(httpd_req_t *req);
 static esp_err_t webserver_update(httpd_req_t *req);
+static esp_err_t webserver_upload_html(httpd_req_t *req);
 static esp_err_t webserver_update_cert_mqtt(httpd_req_t *req);
 static esp_err_t webserver_log(httpd_req_t *req);
 
-static const httpd_uri_t root_tpl = {
+static const httpd_uri_t root_html = {
     .uri       = ROOT,
     .method    = HTTP_GET,
     .handler   = webserver_response,
     .user_ctx  = NULL
 };
 
-static const httpd_uri_t index_tpl = {
+static const httpd_uri_t index_html = {
     .uri       = INDEX,
     .method    = HTTP_GET,
     .handler   = webserver_response,
     .user_ctx  = NULL
 };
 
-static const httpd_uri_t config_tpl = {
+static const httpd_uri_t config_html = {
     .uri       = CONFIG,
     .method    = HTTP_GET,
     .handler   = webserver_response,
     .user_ctx  = NULL
 };
 
-static const httpd_uri_t upload_tpl = {
+static const httpd_uri_t upload_html = {
     .uri       = UPLOAD,
     .method    = HTTP_GET,
     .handler   = webserver_response,
     .user_ctx  = NULL
 };
 
-static const httpd_uri_t update_tpl = {
+static const httpd_uri_t update_html = {
     .uri       = UPDATE,
     .method    = HTTP_POST,
     .handler   = webserver_update,
     .user_ctx  = NULL
 };
 
-static const httpd_uri_t log = {
+static const httpd_uri_t uploadhtml_html = {
+    .uri       = UPLHTML,
+    .method    = HTTP_POST,
+    .handler   = webserver_upload_html,
+    .user_ctx  = NULL
+};
+
+static const httpd_uri_t log_html = {
     .uri       = LOG,
     .method    = HTTP_GET,
     .handler   = webserver_log,
@@ -107,7 +120,7 @@ static const httpd_uri_t log = {
 };
 
 #if MQTT_SSL_ENABLE
-static const httpd_uri_t updatecertmqtt_tpl = {
+static const httpd_uri_t updatecertmqtt_html = {
     .uri       = UPDATECERT,
     .method    = HTTP_POST,
     .handler   = webserver_update_cert_mqtt,
@@ -115,14 +128,14 @@ static const httpd_uri_t updatecertmqtt_tpl = {
 };
 #endif
 
-static const httpd_uri_t settings_tpl = {
+static const httpd_uri_t settings_html = {
     .uri       = SETTINGS,
     .method    = HTTP_GET,
     .handler   = webserver_response,
     .user_ctx  = NULL
 };
 
-static const httpd_uri_t ok_tpl = {
+static const httpd_uri_t ok_html = {
     .uri       = OK,
     .method    = HTTP_GET,
     .handler   = webserver_response,
@@ -264,7 +277,7 @@ static bool webserver_authenticate(httpd_req_t *req) {
     if (buf_len > 1) {
     	buf = malloc(buf_len);
     	if (!buf) {
-    		ESP_LOGE(TAG, "Allocation memory error");
+    		WM_LOGE(TAG, "Allocation memory error. (%s:%u)", __FILE__, __LINE__);
     		return false;
     	}
     	if (httpd_req_get_hdr_value_str(req, auth, buf, buf_len) == ESP_OK) {
@@ -292,6 +305,14 @@ static bool webserver_authenticate(httpd_req_t *req) {
     	free(buf);
     }
 	return login_ok;
+}
+
+static void reboot_task(void *pvParameter) {
+
+	PRINT("-- Rebooting ...\n");
+	vTaskDelay(3000 / portTICK_PERIOD_MS);
+	esp_restart();
+	vTaskDelete(NULL);
 }
 
 static void webserver_parse_settings_uri(httpd_req_t *req) {
@@ -569,7 +590,7 @@ static void webserver_parse_settings_uri(httpd_req_t *req) {
 
 		if (mqttRestart) {
 			mqttRestart = false;
-			mqtt_reinit();
+			mqtt_restart();
 		}
 
 		if (sntpReInit) {
@@ -581,23 +602,21 @@ static void webserver_parse_settings_uri(httpd_req_t *req) {
 	}
 
 	if (rebootNow) {
-		PRINT("-- Rebooting ...\n");
-		vTaskDelay(500 / portTICK_PERIOD_MS);
-		esp_restart();
+		xTaskCreate(&reboot_task, "reboot_task", 2048, NULL, 0, NULL);
 	}
 
 
 }
 
-static esp_err_t webserver_read_tpl(httpd_req_t *req) {
+static esp_err_t webserver_read_file(httpd_req_t *req) {
 
-	char *e = NULL, *subst_token = NULL, token[64], buff[1025];
+	char *send_buff = NULL, *subst_token = NULL, token[32], buff[OTA_BUF_LEN+1];
 	size_t size;
-	int i, pos, sp = 0;
+	int i, pos_token, send_len = 0;
 
-	sprintf(buff, "%s%s.tpl", webserver_html_path, req->uri);
+	sprintf(buff, "%s%s", webserver_html_path, req->uri);
 
-	FILE *f = fopen(buff, "r");
+	FILE *f = fopen(buff, "rb");
 	if (f == NULL) {
 		ESP_LOGE(TAG, "Cannot open file %s", buff);
 	    httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Not Found");
@@ -607,31 +626,31 @@ static esp_err_t webserver_read_tpl(httpd_req_t *req) {
 	char *type = http_content_type(buff);
 	httpd_resp_set_type(req, type);
 
-	pos = -1;
+	pos_token = -1;
 
 	do {
 		size = fread(buff, 1, sizeof(buff)-1, f);
 		if (size > 0) {
-			sp = 0;
-			e = buff;
+			send_len = 0;
+			send_buff = buff;
 			for (i = 0; i < size; i++) {
-				if (pos == -1) {
+				if (pos_token == -1) {
 					if (buff[i] == '%') {
-						if (sp !=0 ) httpd_resp_send_chunk(req, e, sp);
-						sp = 0;
-						pos = 0;
+						if (send_len !=0 ) httpd_resp_send_chunk(req, send_buff, send_len);
+						send_len = 0;
+						pos_token = 0;
 					} else {
-						sp++;
+						send_len++;
 					}
 				} else {
 					if (buff[i]=='%') {
-						if (pos==0) {
+						if (pos_token==0) {
 							//This is the second % of a %% escape string.
 							//Send a single % and resume with the normal program flow.
 							httpd_resp_send_chunk(req, "%", 1);
 						} else {
 							//This is an actual token.
-							token[pos++]=0; //zero-terminate token
+							token[pos_token++]=0; //zero-terminate token
 							// Call function check token
 							subst_token = webserver_subst_token_to_response(token);
 							if (strlen(subst_token)) {
@@ -639,16 +658,16 @@ static esp_err_t webserver_read_tpl(httpd_req_t *req) {
 							}
 						}
 						//Go collect normal chars again.
-						e=&buff[i+1];
-						pos=-1;
+						send_buff=&buff[i+1];
+						pos_token=-1;
 					} else {
-						if (pos<(sizeof(token)-1)) token[pos++]=buff[i];
+						if (pos_token<(sizeof(token)-1)) token[pos_token++]=buff[i];
 					}
 				}
 			}
 		}
-		if (sp != 0) {
-			httpd_resp_send_chunk(req, e, sp);
+		if (send_len != 0) {
+			httpd_resp_send_chunk(req, send_buff, send_len);
 		}
 	} while (size == sizeof(buff)-1);
 
@@ -658,11 +677,14 @@ static esp_err_t webserver_read_tpl(httpd_req_t *req) {
 	return ESP_OK;
 }
 
+
 static esp_err_t webserver_response(httpd_req_t *req) {
 
 	ESP_LOGI(TAG, "Request URI \"%s\"", req->uri);
 
-	if (strcmp(req->uri, ROOT) == 0) strcpy((char*) req->uri, INDEX);
+	if (strcmp(req->uri, ROOT) == 0) {
+		strcpy((char*) req->uri, INDEX);
+	}
 
 	if (firstStart && strcmp(req->uri, INDEX) == 0)
 		return webserver_redirect(req, CONFIG);
@@ -676,10 +698,10 @@ static esp_err_t webserver_response(httpd_req_t *req) {
 
 	if (strncmp(req->uri, SETTINGS, strlen(SETTINGS)) == 0) {
 		webserver_parse_settings_uri(req);
-		strcpy((char*)req->uri, OK);
+//		strcpy((char*)req->uri, OK);
 	}
 
-	esp_err_t ret = webserver_read_tpl(req);
+	esp_err_t ret = webserver_read_file(req);
 
 	httpd_resp_sendstr_chunk(req, NULL);
 
@@ -731,14 +753,293 @@ static esp_err_t webserver_update_cert_mqtt(httpd_req_t *req) {
 
 	char err_buff[128];
     if (ret == ESP_OK && !err) {
-        sprintf(err_buff, "Success. New certificate MQTT is loaded\r\n");
+        sprintf(err_buff, "<a>Success. New certificate MQTT is loaded</a><br/><br/><a href=\"javascript:history.go(-1)\">Return</a>");
         httpd_resp_sendstr(req, err_buff);
     } else {
-        sprintf(err_buff, "%s. Error code: 0x%x\r\n", err, ret);
+        sprintf(err_buff, "<a>%s. Error code: 0x%x</a><br/><br/><a href=\"javascript:history.go(-1)\">Return</a>", err, ret);
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, err_buff);
     }
 
     if (buff) free(buff);
+
+	return ESP_OK;
+}
+
+static char *filename_from_disp(const char* str) {
+	static char filename[256];
+	const char *token = "filename=";
+	char *pos;
+
+	memset(filename, 0, 256);
+
+	pos = strstr(str, token);
+
+	if (!pos) {
+		return NULL;
+	}
+
+	pos +=strlen(token)+1;
+
+	for (int i = 0;*pos != '"';i++, pos++) {
+		if (*pos != '"') {
+			filename[i] = *pos;
+		}
+
+	}
+
+	return filename;
+}
+
+static esp_err_t webserver_upload_html(httpd_req_t *req) {
+
+	FILE *fp = NULL;
+
+	esp_err_t ret = ESP_OK;
+
+	size_t global_cont_len;
+	size_t len;
+	size_t recorded_len = 0;
+
+	char buf[OTA_BUF_LEN];
+	char *tmpname = NULL;
+	char *newname = NULL;
+	char *filename = NULL;
+	char *header = NULL;
+	char *boundary = NULL;
+	const char *hdr_end = "\r\n\r\n";
+	char *err = NULL;
+	char *pos;
+
+	dontSleep = true;
+
+	global_cont_len = req->content_len;
+
+	bool begin = true;
+
+	if (!spiffs) {
+		err = "Spiffs not mount";
+		ret = ESP_FAIL;
+	}
+
+	if (get_fs_free_space() < req->content_len) {
+		err = "Upload file too large";
+		ret = ESP_FAIL;
+	}
+
+	len = httpd_req_get_hdr_value_len(req , "Content-Type")+1;
+
+	if (len > 1) {
+		header = malloc(len);
+		if (!header) {
+			WM_LOGE(TAG, "Error allocation memory. (%s:%u)", __FILE__, __LINE__);
+			err = "Error allocation memory.";
+			ret = ESP_FAIL;
+		} else {
+			ret = httpd_req_get_hdr_value_str(req, "Content-Type", header, len);
+
+			if (ret == ESP_OK) {
+				pos = strstr(header, "boundary=");
+				if (pos) {
+					boundary = pos+strlen("boundary=");
+				} else {
+					err = "Invalid content type";
+					ret = ESP_FAIL;
+				}
+			} else {
+				err = "Invalid content type";
+				ret = ESP_FAIL;
+			}
+
+		}
+	}
+
+	if (!err) {
+
+			while (global_cont_len) {
+				len = httpd_req_recv(req, buf, OTA_BUF_LEN);
+				if (global_cont_len > OTA_BUF_LEN || begin) {
+					if (begin) {
+						begin = false;
+						pos = strstr(buf, "Content-Disposition:");
+						if (!pos) {
+							err = "Invalid content type";
+							ret = ESP_FAIL;
+							break;
+						}
+
+						filename = filename_from_disp(pos);
+
+						if (!filename) {
+							err = "Invalid file name";
+							ret = ESP_FAIL;
+							break;
+						}
+
+						tmpname = malloc(strlen(HTML_PATH)+1+strlen(filename)+5);
+
+						if (!tmpname) {
+							WM_LOGE(TAG, "Error allocation memory. (%s:%u)", __FILE__, __LINE__);
+							err = "Error allocation memory.";
+							ret = ESP_FAIL;
+							break;
+
+						}
+
+						newname = malloc(strlen(HTML_PATH)+1+strlen(filename)+1);
+						if (!newname) {
+							WM_LOGE(TAG, "Error allocation memory. (%s:%u)", __FILE__, __LINE__);
+							err = "Error allocation memory.";
+							ret = ESP_FAIL;
+							break;
+
+						}
+
+						sprintf(newname, "%s%s%s", HTML_PATH, DELIM, filename);
+
+						sprintf(tmpname, "%s%s", newname, ".tmp");
+
+						fp = fopen(tmpname, "wb");
+
+						if (!fp) {
+							WM_LOGE(TAG, "Cannot open file \"%s\" (%s:%u)", tmpname, __FILE__, __LINE__);
+							err = "Cannot open file";
+							ret = ESP_FAIL;
+							break;
+						}
+
+						fseek(fp, 0, SEEK_SET);
+
+						pos = strstr(buf, hdr_end) + strlen(hdr_end);
+						if (!pos) {
+							err = "Invalid content type";
+							ret = ESP_FAIL;
+							break;
+						}
+
+						PRINT("-- Loading \"%s\" file\n", filename);
+						PRINT("-- Please wait");
+						vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+						char *p = strstr(pos, boundary);
+						if (p) {
+							for(;*p == '-'; p--);
+							*(p-1) = 0;
+							size_t l = strlen(pos);
+							if (fwrite(pos, sizeof(uint8_t), l, fp) != l) {
+								err = "Error wtite file";
+								ret = ESP_FAIL;
+								break;
+							}
+							recorded_len += l;
+
+						} else {
+							size_t plen = len - (pos - buf);
+							if (fwrite(pos, sizeof(uint8_t), plen, fp) != plen) {
+								err = "Error wtite file";
+								ret = ESP_FAIL;
+								break;
+							}
+							recorded_len += plen;
+						}
+
+					} else {
+						pos = strstr(buf, boundary);
+						if (pos) {
+							for(;*pos == '-'; pos--);
+							*(pos-1) = 0;
+							size_t l = strlen(buf);
+							if (fwrite(buf, sizeof(uint8_t), l, fp) != l) {
+								err = "Error wtite file";
+								ret = ESP_FAIL;
+								break;
+							}
+							recorded_len += l;
+						} else {
+							if (fwrite(buf, sizeof(uint8_t), len, fp) != len) {
+								err = "Error wtite file";
+								ret = ESP_FAIL;
+								break;
+							}
+							recorded_len += len;
+						}
+					}
+					global_cont_len -= len;
+				} else {
+					if (global_cont_len > 0) {
+						pos = strstr(buf, boundary);
+						if (pos) {
+							for(;*pos == '-'; pos--);
+							*(pos-1) = 0;
+							size_t l = strlen(buf);
+							if (fwrite(buf, sizeof(uint8_t), l, fp) != l) {
+								err = "Error wtite file";
+								ret = ESP_FAIL;
+								break;
+							}
+							recorded_len += l;
+						} else {
+							if (fwrite(buf, sizeof(uint8_t), len, fp) != len) {
+								err = "Error wtite file";
+								ret = ESP_FAIL;
+								break;
+							}
+							recorded_len += len;
+						}
+						global_cont_len -= len;
+					}
+				}
+				printf(".");
+				fflush(stdout);
+			}
+
+			PRINT("\n-- File transferred finished: %d bytes\n", recorded_len);
+
+			fclose(fp);
+	}
+
+
+    if (ret == ESP_OK && !err) {
+        sprintf(buf, "<a>Success. File uploaded.</a><br/><br/><a href=\"javascript:history.go(-1)\">Return</a>");
+        httpd_resp_sendstr(req, buf);
+    } else {
+        sprintf(buf, "Failure. Error code: 0x%x\r\n", ret);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, buf);
+    }
+
+    if (ret == ESP_OK && !err) {
+
+        struct stat st;
+        if (stat(newname, &st) == 0) {
+            unlink(newname);
+        }
+
+        if (rename(tmpname, newname) != 0) {
+			WM_LOGE(TAG, "File rename \"%s\" to \"%s\" failed. (%s:%u)", tmpname, newname, __FILE__, __LINE__);
+        }
+
+//    	DIR *dir;
+//    	struct dirent *de;
+//
+//    	dir = opendir(HTML_PATH);
+//
+//
+//    	if (!dir) {
+//    		WM_LOGE(TAG, "open \"%s\"directory failed",  HTML_PATH);
+//    		return ESP_OK;
+//    	}
+//
+//    	while ((de = readdir(dir))) {
+//    		printf("%s\n", de->d_name);
+//    	}
+//    	closedir(dir);
+
+    }
+
+    dontSleep = false;
+
+    if (tmpname) free(tmpname);
+    if (newname) free(newname);
+    if (header)  free(header);
 
 	return ESP_OK;
 }
@@ -847,12 +1148,12 @@ static esp_err_t webserver_update(httpd_req_t *req) {
 		ret = esp_ota_set_boot_partition(partition);
 	} else {
 		sprintf(buf, "%s 0x%x", err, ret);
-		ESP_LOGE(TAG, "%s", buf);
+		WM_LOGE(TAG, "%s. (%s:%u)", buf, __FILE__, __LINE__);
 		ret = ESP_FAIL;
 	}
 
     if (ret == ESP_OK && !err) {
-        sprintf(buf, "Success. Next boot partition is %s. Restart system...\r\n", partition->label);
+        sprintf(buf, "<a>Success. Next boot partition is %s. Restart system...</a><br/><br/><a href=\"javascript:history.go(-1)\">Return</a>", partition->label);
         httpd_resp_sendstr(req, buf);
     } else {
         sprintf(buf, "Failure. Error code: 0x%x\r\n", ret);
@@ -892,7 +1193,7 @@ static esp_err_t webserver_log(httpd_req_t *req) {
 
 	lstack_elem_t *lstack = get_lstack();
 
-	ret = webserver_read_tpl(req);
+	ret = webserver_read_file(req);
 
 	if (ret == ESP_FAIL) {
 		return ret;
@@ -940,6 +1241,7 @@ static esp_err_t webserver_log(httpd_req_t *req) {
 
 			lstack = lstack->next;
 		}
+		httpd_resp_send_chunk(req, "<br/><a href=\"javascript:history.go(-1)\">Return</a>", HTTPD_RESP_USE_STRLEN);
 		httpd_resp_send_chunk(req, end_doc, HTTPD_RESP_USE_STRLEN);
 		httpd_resp_sendstr_chunk(req, NULL);
 	}
@@ -954,37 +1256,53 @@ void webserver_restart() {
 static httpd_handle_t webserver_start(void) {
 
 	httpd_handle_t server = NULL;
+	esp_err_t ret = ESP_FAIL;
+
+	httpd_ssl_config_t https_config = HTTPD_SSL_CONFIG_DEFAULT();
+
+	https_config.httpd.max_uri_handlers = 12;
+
+	PRINT("-- Starting webserver\n");
 
 	if (cacert) {
-		config.cacert_pem = (uint8_t*)cacert;
-		config.cacert_len = strlen(cacert)+1;
+		https_config.cacert_pem = (uint8_t*)cacert;
+		https_config.cacert_len = strlen(cacert)+1;
 	}
 
 	if (prvtkey) {
-		config.prvtkey_pem = (uint8_t*)prvtkey;
-		config.prvtkey_len = strlen(prvtkey)+1;
+		https_config.prvtkey_pem = (uint8_t*)prvtkey;
+		https_config.prvtkey_len = strlen(prvtkey)+1;
 	}
 
-	ESP_LOGI(TAG, "Starting webserver");
-
-	if (httpd_ssl_start(&server, &config) == ESP_OK) {
+	if (httpd_ssl_start(&server, &https_config) == ESP_OK) {
 		// Set URI handlers
 		ESP_LOGI(TAG, "Registering URI handlers");
-		httpd_register_uri_handler(server, &root_tpl);
-		httpd_register_uri_handler(server, &index_tpl);
-		httpd_register_uri_handler(server, &config_tpl);
-		httpd_register_uri_handler(server, &upload_tpl);
-		httpd_register_uri_handler(server, &update_tpl);
-		httpd_register_uri_handler(server, &log);
+		ret = httpd_register_uri_handler(server, &root_html);
+		if (ret != ESP_OK) WM_LOGE(TAG, "URL \"%s\" not registered", root_html.uri);
+		ret = httpd_register_uri_handler(server, &index_html);
+		if (ret != ESP_OK) WM_LOGE(TAG, "URL \"%s\" not registered", index_html.uri);
+		ret = httpd_register_uri_handler(server, &config_html);
+		if (ret != ESP_OK) WM_LOGE(TAG, "URL \"%s\" not registered", config_html.uri);
+		ret = httpd_register_uri_handler(server, &upload_html);
+		if (ret != ESP_OK) WM_LOGE(TAG, "URL \"%s\" not registered", upload_html.uri);
+		ret = httpd_register_uri_handler(server, &update_html);
+		if (ret != ESP_OK) WM_LOGE(TAG, "URL \"%s\" not registered", update_html.uri);
+		ret = httpd_register_uri_handler(server, &uploadhtml_html);
+		if (ret != ESP_OK) WM_LOGE(TAG, "URL \"%s\" not registered", uploadhtml_html.uri);
+		ret = httpd_register_uri_handler(server, &log_html);
+		if (ret != ESP_OK) WM_LOGE(TAG, "URL \"%s\" not registered", log_html.uri);
 #if MQTT_SSL_ENABLE
-		httpd_register_uri_handler(server, &updatecertmqtt_tpl);
+		httpd_register_uri_handler(server, &updatecertmqtt_html);
+		if (ret != ESP_OK) WM_LOGE(TAG, "URL \"%s\" not registered", updatecertmqtt_html.uri);
 #endif
-		httpd_register_uri_handler(server, &settings_tpl);
-		httpd_register_uri_handler(server, &ok_tpl);
+		httpd_register_uri_handler(server, &settings_html);
+		if (ret != ESP_OK) WM_LOGE(TAG, "URL \"%s\" not registered", settings_html.uri);
+		httpd_register_uri_handler(server, &ok_html);
+		if (ret != ESP_OK) WM_LOGE(TAG, "URL \"%s\" not registered", ok_html.uri);
 		return server;
 	}
 
-	ESP_LOGE(TAG, "Error starting server!");
+	WM_LOGE(TAG, "Error starting server! (%s:%u)", __FILE__, __LINE__);
 	return NULL;
 }
 
@@ -998,7 +1316,7 @@ static void webserver_stop(httpd_handle_t server)
 static void webserver_disconnect_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
     httpd_handle_t* server = (httpd_handle_t*) arg;
     if (*server && !staApModeNow) {
-        ESP_LOGI(TAG, "Stopping webserver");
+    	PRINT("-- Stopping webserver\n");
         webserver_stop(*server);
         *server = NULL;
     }
@@ -1057,7 +1375,7 @@ void webserver_init(const char *html_path) {
 	webserver_html_path = malloc(strlen(html_path)+1);
 
 	if (webserver_html_path == NULL) {
-		ESP_LOGE(TAG, "Error allocation memory");
+		WM_LOGE(TAG, "Error allocation memory. (%s:%u)", __FILE__, __LINE__);
 		return;
 	}
 

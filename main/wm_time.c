@@ -42,7 +42,7 @@ void set_time_zone() {
 }
 
 static void watermeter_time_sync_notification(struct timeval *tv) {
-    ESP_LOGI(TAG, "Notification of a time synchronization event");
+	ESP_LOGI(TAG, "Notification of a time synchronization event");
 }
 
 

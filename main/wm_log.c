@@ -2,7 +2,9 @@
 #include <string.h>
 #include <time.h>
 #include "esp_log.h"
+#include "esp_timer.h"
 
+#include "wm_global.h"
 #include "wm_log.h"
 
 char *TAG = "watermeter_log";
@@ -15,7 +17,7 @@ lstack_elem_t *get_lstack() {
 }
 
 
-/* delete color symbols and "\n" from str */
+/* delete color symbols, '\n', '<', '>' from str */
 static char *trim_str_lstack(char *str) {
 
 	char *str_dest, *str_source, *pos;
@@ -33,6 +35,8 @@ static char *trim_str_lstack(char *str) {
 		}
 
 		if (*str_source == '\n') str_source++;
+		if (*str_source == '<')  str_source++;
+		if (*str_source == '>')  str_source++;
 
 		if (str_source != str_dest) {
 			*str_dest = *str_source;
@@ -63,7 +67,7 @@ bool write_to_lstack(char *str) {
 	lstack_new = malloc(sizeof(lstack_elem_t));
 
 	if (lstack_new == NULL) {
-		ESP_LOGE(TAG, "Error allocation memory");
+		WM_LOGE(TAG, "Error allocation memory. (%s:%u)", __FILE__, __LINE__);
 		return ret;
 	}
 
@@ -105,4 +109,31 @@ bool write_to_lstack(char *str) {
 	return ret;
 }
 
+void wm_log(const char * tag, const char *str, ...) {
+	char *buff;
+	char *out_str;
 
+	va_list args;
+
+	va_start(args, str);
+
+	vasprintf(&buff, str, args);
+
+	va_end(args);
+
+	if (buff == NULL) {
+		PRINT("%sE (%llu) %s: Error writing to the log of watermeter%s\n", WM_LOG_COLOR, esp_timer_get_time(), tag, WM_LOG_COLOR_RESET);
+		return;
+	}
+
+	// "E (823) vfs_fat_sdmmc: slot init failed (0x103)."
+
+	asprintf(&out_str, "%sE (%llu) %s: %s%s\n", WM_LOG_COLOR, esp_timer_get_time(), tag, buff, WM_LOG_COLOR_RESET);
+
+	if (out_str == NULL) {
+		PRINT("%s\n", buff);
+	} else {
+		free(buff);
+		PRINT(out_str);
+	}
+}

@@ -107,7 +107,7 @@ static void mqtt_data(const char *topic, size_t topic_len, const char *data, siz
 	data_buf = malloc(data_len+1);
 
 	if (!data_buf) {
-		ESP_LOGE(TAG, "Error allocation memory");
+		WM_LOGE(TAG, "Error allocation memory. (%s:%u)", __FILE__, __LINE__);
 		return;
 	}
 
@@ -136,7 +136,7 @@ static void mqtt_data(const char *topic, size_t topic_len, const char *data, siz
 					return;
 				}
 			} else {
-				ESP_LOGE(TAG, "File from topic \"%s\" is not certificate.", topic_water[control]);
+				WM_LOGE(TAG, "File from topic \"%s\" is not certificate. (%s:%u)", topic_water[control], __FILE__, __LINE__);
 			}
 
 		} else {
@@ -269,14 +269,7 @@ void mqtt_check_task(void *pvParameter) {
 
 				PRINT("-- New certificate MQTT now\n");
 				new_certificate = false;
-				mqtt_set_config();
-				mqtt_stop();
-//				esp_mqtt_client_stop(client);
-				vTaskDelay(10000 / portTICK_PERIOD_MS);
-				mqtt_set_config();
-				esp_mqtt_set_config(client , &mqtt_cfg);
-				mqtt_start();
-//				esp_mqtt_client_start(client);
+				mqtt_restart();
 			}
 		}
 		vTaskDelay(xDelay);
@@ -309,38 +302,32 @@ void mqtt_init() {
 }
 
 void mqtt_start() {
-	ESP_LOGI(TAG, "Start mqtt client");
+	PRINT("-- Start mqtt client\n");
 	mqtt_count_disconnect = 0;
 	esp_mqtt_client_start(client);
 }
 
 void mqtt_stop() {
 	if (connected) {
-		ESP_LOGI(TAG, "Stop mqtt client");
+		PRINT("-- Stop mqtt client\n");
 		esp_mqtt_client_stop(client);
 		connected = false;
 	}
 }
 
 void mqtt_restart() {
-	ESP_LOGI(TAG, "Restart mqtt client");
-	esp_mqtt_client_stop(client);
-	vTaskDelay(10000 / portTICK_PERIOD_MS);
-	esp_mqtt_client_start(client);
-}
-
-void mqtt_reinit() {
-
-	ESP_LOGI(TAG, "Reinit mqtt client");
+	PRINT("-- Restart mqtt client\n");
 
 	mqtt_count_disconnect = 0;
 	mqttFirstStart = true;
 
-	mqtt_set_config();
-
 	esp_mqtt_client_stop(client);
+
 	vTaskDelay(10000 / portTICK_PERIOD_MS);
-	esp_mqtt_set_config(client , &mqtt_cfg);
+
+	mqtt_set_config();
+	esp_mqtt_set_config(client, &mqtt_cfg);
+
 	esp_mqtt_client_start(client);
 }
 
@@ -354,7 +341,7 @@ bool mqtt_new_cert_from_webserver(const char *cert) {
 			ret = true;
 		}
 	} else {
-		ESP_LOGE(TAG, "Uploaded file is not certificate.");
+		WM_LOGE(TAG, "Uploaded file is not certificate. (%s:%u)", __FILE__, __LINE__);
 	}
 
 	return ret;

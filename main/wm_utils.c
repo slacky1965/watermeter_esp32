@@ -164,12 +164,13 @@ char *read_file(const char *fileName) {
 
 			if (flen > 1) {
 				if (flen >= MAX_BUFF_RW) {
-					ESP_LOGE(TAG, "The file size is too large. \"%s\" len - %u, more, than %u", fileName, flen, MAX_BUFF_RW);
+					WM_LOGE(TAG, "The file size is too large. \"%s\" len - %u, more, than %u. (%s:%u)",
+							fileName, flen, MAX_BUFF_RW, __FILE__, __LINE__);
 					fclose(fp);
 					return NULL;
 				}
 			} else {
-				ESP_LOGE(TAG, "Empty file - \"%s\"", fileName);
+				WM_LOGE(TAG, "Empty file - \"%s\". (%s:%u)", fileName, __FILE__, __LINE__);
 				fclose(fp);
 				return NULL;
 			}
@@ -179,7 +180,7 @@ char *read_file(const char *fileName) {
 			rbuff = malloc(flen+1);
 
 			if (rbuff == NULL) {
-				ESP_LOGE(TAG, "Error allocation memory");
+				WM_LOGE(TAG, "Error allocation memory. (%s:%u)", __FILE__, __LINE__);
 				fclose(fp);
 				return NULL;
 			}
@@ -187,7 +188,7 @@ char *read_file(const char *fileName) {
 			memset(rbuff, 0, flen+1);
 
 			if (fread(rbuff, sizeof(uint8_t), flen, fp) != flen) {
-				ESP_LOGE(TAG, "File \"%s\" read error from %s", fileName, sdcard ? "sdcard" : "spiffs");
+				WM_LOGE(TAG, "File \"%s\" read error from %s. (%s:%u)", fileName, sdcard ? "sdcard" : "spiffs", __FILE__, __LINE__);
 				fclose(fp);
 				free(rbuff);
 				return NULL;
@@ -196,10 +197,10 @@ char *read_file(const char *fileName) {
 			fclose(fp);
 
 		} else {
-			ESP_LOGE(TAG, "Cannot open file \"%s\"", fileName);
+			WM_LOGE(TAG, "Cannot open file \"%s\". (%s:%u)", fileName, __FILE__, __LINE__);
 		}
 	} else {
-		ESP_LOGE(TAG, "Not initializing sdcard or spiffs");
+		WM_LOGE(TAG, "Not initializing sdcard or spiffs. (%s:%u)", __FILE__, __LINE__);
 	}
 
 	return rbuff;
@@ -215,7 +216,7 @@ bool write_file(const char *fileName, const char *wbuff, size_t flen) {
 		if (fp) {
 			fseek(fp, 0, SEEK_SET);
 			if (fwrite(wbuff, sizeof(uint8_t), flen, fp) != flen) {
-				ESP_LOGE(TAG, "File \"%s\" write error to %s", fileName, sdcard ? "sdcard" : "spiffs");
+				WM_LOGE(TAG, "File \"%s\" write error to %s. (%s:%u)", fileName, sdcard ? "sdcard" : "spiffs", __FILE__, __LINE__);
 				fclose(fp);
 				return ret;
 			}
@@ -223,10 +224,10 @@ bool write_file(const char *fileName, const char *wbuff, size_t flen) {
 			fclose(fp);
 
 		} else {
-			ESP_LOGE(TAG, "Cannot open file \"%s\"", fileName);
+			WM_LOGE(TAG, "Cannot open file \"%s\". (%s:%u)", fileName, __FILE__, __LINE__);
 		}
 	} else {
-		ESP_LOGE(TAG, "Not initializing sdcard or spiffs");
+		WM_LOGE(TAG, "Not initializing sdcard or spiffs. (%s:%u)", __FILE__, __LINE__);
 	}
 
 	return ret;
@@ -265,9 +266,13 @@ int my_vprintf(const char *frm, va_list args) {
 
 	if (buff == NULL) return 0;
 
+#if ESP_LOG_OUT
 	printf(buff);
 
 	write_to_lstack(buff);
+#else
+	free(buff);
+#endif
 
 	return len;
 }

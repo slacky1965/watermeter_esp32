@@ -41,7 +41,6 @@ void mqtt_init();
 void mqtt_start();
 void mqtt_stop();
 void mqtt_restart();
-void mqtt_reinit();
 bool mqtt_connected();
 char *mqtt_get_topic(topic_name tn);
 int mqtt_publish(const char *topic, const char *data);
