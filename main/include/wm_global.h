@@ -7,7 +7,7 @@
 
 #define PRINT  my_printf						/* Use PRINT instead of printf				*/
 #define WM_LOGE wm_log							/* Use WM_LOGE instead of ESP_LOGE			*/
-#define ESP_LOG_OUT	true						/* false - no msg ESP_LOG*, only PRINT		 */
+#define ESP_LOG_OUT	false						/* false - no msg ESP_LOG*, only PRINT		 */
 #define CRIPTBYTE	0xA3						/* For light crypt configure file	 		 */
 
 #define SLEEP_MODE_ON false                     /* To pass into sleep mode if true   		 */
