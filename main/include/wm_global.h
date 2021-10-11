@@ -10,8 +10,8 @@
 #define ESP_LOG_OUT	false						/* false - no msg ESP_LOG*, only PRINT		 */
 #define CRIPTBYTE	0xA3						/* For light crypt configure file	 		 */
 
-#define SLEEP_MODE_ON false                     /* To pass into sleep mode if true   		 */
-#define NOT_READ_EEPROM true                   /* Dont't read from EEPROM if true   		 */
+#define SLEEP_MODE_ON false						/* To pass into sleep mode if true   		 */
+#define NOT_READ_EEPROM true					/* Dont't read from EEPROM if true   		 */
 
 /* Define pin name */
 #define VBUS 	   ADC1_CHANNEL_7;				/* Pin of get voltage - GPIO35 		 		  */
