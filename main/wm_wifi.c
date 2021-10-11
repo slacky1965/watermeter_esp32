@@ -64,7 +64,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t e
         ESP_LOGI(TAG,"Connect to the station \"%s\" fail", config_get_staSsid());
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
-        PRINT("-- Station mode. Please go to https://" IPSTR "\n", IP2STR(&event->ip_info.ip));
+        PRINT("Station mode. Please go to https://" IPSTR "\n", IP2STR(&event->ip_info.ip));
         ip_info = event->ip_info;
         s_retry_num = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
@@ -161,8 +161,8 @@ void setNullWiFiConfigDefault() {
 }
 
 static void print_start_ap_msg() {
-	PRINT("-- WiFi network Name: %s, Password: %s\n", config_get_apSsid(), config_get_apPassword());
-	PRINT("-- Please go to https://" IPSTR "\n", IP2STR(&ip_info.ip));
+	PRINT("WiFi network Name: %s, Password: %s\n", config_get_apSsid(), config_get_apPassword());
+	PRINT("Please go to https://" IPSTR "\n", IP2STR(&ip_info.ip));
 }
 
 void startWiFiSTA_AP() {
@@ -176,7 +176,7 @@ void startWiFiSTA_AP() {
 	staModeNow = false;
 
 
-	PRINT("-- Start WiFi AP+STA Mode\n");
+	PRINT("Start WiFi AP+STA Mode\n");
 
     ESP_ERROR_CHECK(esp_wifi_stop());
 
@@ -222,7 +222,7 @@ void startWiFiAP() {
 
 	wifi_config_t ap_config;
 
-	PRINT("-- Start WiFi AP Mode\n");
+	PRINT("Start WiFi AP Mode\n");
 
     ESP_ERROR_CHECK(esp_wifi_stop());
 
@@ -265,8 +265,8 @@ void startWiFiSTA() {
 
 	wifi_config_t sta_config;
 
-	PRINT("-- Start WiFi STA Mode\n");
-	PRINT("-- Connecting to: %s\n", config_get_staSsid());
+	PRINT("Start WiFi STA Mode\n");
+	PRINT("Connecting to: %s\n", config_get_staSsid());
 
     ESP_ERROR_CHECK(esp_wifi_stop());
 //	ESP_ERROR_CHECK(esp_wifi_get_config(WIFI_IF_STA, &sta_config));

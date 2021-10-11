@@ -309,7 +309,7 @@ static bool webserver_authenticate(httpd_req_t *req) {
 
 static void reboot_task(void *pvParameter) {
 
-	PRINT("-- Rebooting ...\n");
+	PRINT("Rebooting ...\n");
 	vTaskDelay(3000 / portTICK_PERIOD_MS);
 	esp_restart();
 	vTaskDelete(NULL);
@@ -508,7 +508,7 @@ static void webserver_parse_settings_uri(httpd_req_t *req) {
 		defaultConfig = false;
 		removeConfig();
 		if (rebootNow) {
-			PRINT("-- Rebooting ...\n");
+			PRINT("Rebooting ...\n");
 			vTaskDelay(500 / portTICK_PERIOD_MS);
 			esp_restart();
 		}
@@ -916,8 +916,8 @@ static esp_err_t webserver_upload_html(httpd_req_t *req) {
 							break;
 						}
 
-						PRINT("-- Loading \"%s\" file\n", filename);
-						PRINT("-- Please wait");
+						PRINT("Loading \"%s\" file\n", filename);
+						PRINT("Please wait");
 						vTaskDelay(1000 / portTICK_PERIOD_MS);
 
 						char *p = strstr(pos, boundary);
@@ -1094,9 +1094,9 @@ static esp_err_t webserver_update(httpd_req_t *req) {
 							}
 
 
-							PRINT("-- Writing to partition name \"%s\" subtype %d at offset 0x%x\n",
+							PRINT("Writing to partition name \"%s\" subtype %d at offset 0x%x\n",
 									partition->label, partition->subtype, partition->address);
-							PRINT("-- Please wait");
+							PRINT("Please wait");
 							vTaskDelay(1000 / portTICK_PERIOD_MS);
 
 							size_t plen = len - (pos - buf);
@@ -1168,9 +1168,9 @@ static esp_err_t webserver_update(httpd_req_t *req) {
 		esp_wifi_disconnect();
 
 		const esp_partition_t *boot_partition = esp_ota_get_boot_partition();
-		PRINT("-- Next boot partition \"%s\" name subtype %d at offset 0x%x\n",
+		PRINT("Next boot partition \"%s\" name subtype %d at offset 0x%x\n",
 				boot_partition->label, boot_partition->subtype, boot_partition->address);
-		PRINT("-- Prepare to restart system!\n--\n--\n\n");
+		PRINT("Prepare to restart system!\n--\n--\n\n");
 
 		vTaskDelay(2000 / portTICK_PERIOD_MS);
 
@@ -1210,24 +1210,34 @@ static esp_err_t webserver_log(httpd_req_t *req) {
 			if (lstack->str) {
 				switch(*(lstack->str)) {
 					case	'E':
-						color = true;
-						httpd_resp_send_chunk(req, COLOR_E, HTTPD_RESP_USE_STRLEN);
+						if (lstack->str[1] == ' ') {
+							color = true;
+							httpd_resp_send_chunk(req, COLOR_E, HTTPD_RESP_USE_STRLEN);
+						}
 						break;
 					case	'W':
-						color = true;
-						httpd_resp_send_chunk(req, COLOR_W, HTTPD_RESP_USE_STRLEN);
+						if (lstack->str[1] == ' ') {
+							color = true;
+							httpd_resp_send_chunk(req, COLOR_W, HTTPD_RESP_USE_STRLEN);
+						}
 						break;
 					case	'I':
-						color = true;
-						httpd_resp_send_chunk(req, COLOR_I, HTTPD_RESP_USE_STRLEN);
+						if (lstack->str[1] == ' ') {
+							color = true;
+							httpd_resp_send_chunk(req, COLOR_I, HTTPD_RESP_USE_STRLEN);
+						}
 						break;
 					case	'D':
-						color = true;
-						httpd_resp_send_chunk(req, COLOR_D, HTTPD_RESP_USE_STRLEN);
+						if (lstack->str[1] == ' ') {
+							color = true;
+							httpd_resp_send_chunk(req, COLOR_D, HTTPD_RESP_USE_STRLEN);
+						}
 						break;
 					case	'V':
-						color = true;
-						httpd_resp_send_chunk(req, COLOR_V, HTTPD_RESP_USE_STRLEN);
+						if (lstack->str[1] == ' ') {
+							color = true;
+							httpd_resp_send_chunk(req, COLOR_V, HTTPD_RESP_USE_STRLEN);
+						}
 						break;
 					default:
 						break;
@@ -1262,7 +1272,7 @@ static httpd_handle_t webserver_start(void) {
 
 	https_config.httpd.max_uri_handlers = 12;
 
-	PRINT("-- Starting webserver\n");
+	PRINT("Starting webserver\n");
 
 	if (cacert) {
 		https_config.cacert_pem = (uint8_t*)cacert;
@@ -1316,7 +1326,7 @@ static void webserver_stop(httpd_handle_t server)
 static void webserver_disconnect_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
     httpd_handle_t* server = (httpd_handle_t*) arg;
     if (*server && !staApModeNow) {
-    	PRINT("-- Stopping webserver\n");
+    	PRINT("Stopping webserver\n");
         webserver_stop(*server);
         *server = NULL;
     }
@@ -1342,7 +1352,7 @@ static void http_check_task(void *pvparameters)
 	for (;;) {
 		if (staApModeNow || staModeNow || apModeNow) {
 			if (restartWebServer) {
-				PRINT("-- Restart webserver\n");
+				PRINT("Restart webserver\n");
 				if (*server) {
 					webserver_stop(*server);
 					*server = NULL;
@@ -1370,7 +1380,7 @@ void webserver_init(const char *html_path) {
 
 	static httpd_handle_t server = NULL;
 
-	PRINT("-- Initializing webserver. Please use prefix https://...\n");
+	PRINT("Initializing webserver. Please use prefix https://...\n");
 
 	webserver_html_path = malloc(strlen(html_path)+1);
 

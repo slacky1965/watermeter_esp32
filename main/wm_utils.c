@@ -42,26 +42,26 @@ static void light_sleep_task(void *pvParameter) {
 			powerLow = true;
 			if (sleep_count < SLEEP_COUNT_MAX) {
 				if (sleep_count == 0) {
-					PRINT("-- Power low! Preparing for sleep light mode.\n");
+					PRINT("Power low! Preparing for sleep light mode.\n");
 				}
 				sleep_count++;
 			} else {
 				sleepNow = true;
 				if (!dontSleep) {
-					PRINT("-- Light sleep set now!\n");
+					PRINT("Light sleep set now!\n");
 					mqtt_stop();
 					esp_wifi_stop();
 				    vTaskDelay(1000 / portTICK_PERIOD_MS);
 			        esp_sleep_enable_gpio_wakeup();
 			        esp_light_sleep_start();
 			        sleep_count = 1;
-			        PRINT("-- Awoke from a light sleep\n");
+			        PRINT("Awoke from a light sleep\n");
 				}
 			}
 		} else {
 			powerLow = false;
 			if (sleep_count != 0) {
-				PRINT("-- External power high.\n");
+				PRINT("External power high.\n");
 				sleepNow = false;
 				sleep_count = 0;
 				esp_wifi_start();
@@ -237,22 +237,35 @@ bool write_file(const char *fileName, const char *wbuff, size_t flen) {
 int my_printf(const char *frm, ...) {
 
 	va_list args;
-	char *buff;
-	int len = 0;
+	char *buff, *out_str;
+	int len_buff = 0;
+	int len_out_str = 0;
 
 	va_start(args, frm);
 
-	len = vasprintf(&buff, frm, args);
+	len_buff = vasprintf(&buff, frm, args);
 
 	va_end(args);
 
 	if (buff == NULL) return 0;
 
-	printf(buff);
+	len_out_str = asprintf(&out_str, "-- (%llu) %s", esp_timer_get_time(), buff);
 
-	write_to_lstack(buff);
+	if (out_str == NULL || strstr(buff, "E (")
+						|| strstr(buff, "W (")
+						|| strstr(buff, "I (")
+						|| strstr(buff, "D (")
+						|| strstr(buff, "V (")) {
+		printf(buff);
+		write_to_lstack(buff);
+		return len_buff;
+	}
 
-	return len;
+	printf(out_str);
+	write_to_lstack(out_str);
+	free(buff);
+
+	return len_out_str;
 }
 
 

@@ -50,7 +50,7 @@ void wm_sntp_init() {
 
 	char *sntp_server = config_get_ntpServerName();
 
-    PRINT("-- Initializing SNTP. Server: %s, TZ: %d\n", sntp_server, config_get_timeZone());
+    PRINT("Initializing SNTP. Server: %s, TZ: %d\n", sntp_server, config_get_timeZone());
 
     sntp_setoperatingmode(SNTP_OPMODE_POLL);
     sntp_set_sync_mode(SNTP_SYNC_MODE_IMMED);
@@ -95,6 +95,7 @@ char *localTimeStr() {
 
 	localtime_r(&now, &timeinfo);
 	strftime(strftime_buf, sizeof(strftime_buf), "Local time: %X %d.%m.%Y", &timeinfo);
+//	strftime(strftime_buf, sizeof(strftime_buf), "%X %d.%m.%Y", &timeinfo);
 	return strftime_buf;
 }
 

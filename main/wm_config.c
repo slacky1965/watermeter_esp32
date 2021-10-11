@@ -224,7 +224,7 @@ bool readConfig() {
 			if (watermeter_config.staSsid[0] != 0)
 				staConfigure = true;
 			ret = true;
-			PRINT("-- Config is read from \"%s\" file\n", configFileName);
+			PRINT("Config is read from \"%s\" file\n", configFileName);
 		} else {
 			WM_LOGE(TAG, "Config file \"%s\" read error! (%s:%u)", configFileName, __FILE__, __LINE__);
 		}
@@ -259,7 +259,7 @@ void saveConfig() {
 				return;
 			}
 			fclose(file);
-			PRINT("-- Save config to %s file\n", configFileName);
+			PRINT("Save config to %s file\n", configFileName);
 		} else
 			WM_LOGE(TAG, "Config file \"%s\" write error! (%s:%u)", configFileName, __FILE__, __LINE__);
 	} else {

@@ -93,7 +93,7 @@ static void mqtt_data(const char *topic, size_t topic_len, const char *data, siz
 			webserver_restart();
 			return;
 		} else if (strstr(topic, CMD_REBOOT)) {
-			PRINT("-- Rebooting ...\n");
+			PRINT("Rebooting ...\n");
 			vTaskDelay(500 / portTICK_PERIOD_MS);
 			esp_restart();
 		}
@@ -114,7 +114,7 @@ static void mqtt_data(const char *topic, size_t topic_len, const char *data, siz
 	memcpy(data_buf, data, data_len);
 	data_buf[data_len] = 0;
 
-	if (!new_cert) PRINT("-- %s ==> %.*s\n", data_buf, topic_len, topic);
+	if (!new_cert) PRINT("%s ==> %.*s\n", data_buf, topic_len, topic);
 
 	pos = strcspn(data_buf, " ");
 
@@ -186,11 +186,11 @@ static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event) {
 			mqtt_count_disconnect = 0;
 			connected = true;
 			if (mqttFirstStart) {
-				PRINT("-- Full name input topic for hot water:   %s\n", topic_water[hot_in]);
-				PRINT("-- Full name input topic for cold water:  %s\n", topic_water[cold_in]);
-				PRINT("-- Full name input topic for control:     %s\n", topic_water[control]);
-				PRINT("-- Full name output topic for hot water:  %s\n", topic_water[hot_out]);
-				PRINT("-- Full name output topic for cold water: %s\n", topic_water[cold_out]);
+				PRINT("Full name input topic for hot water:   %s\n", topic_water[hot_in]);
+				PRINT("Full name input topic for cold water:  %s\n", topic_water[cold_in]);
+				PRINT("Full name input topic for control:     %s\n", topic_water[control]);
+				PRINT("Full name output topic for hot water:  %s\n", topic_water[hot_out]);
+				PRINT("Full name output topic for cold water: %s\n", topic_water[cold_out]);
 				mqttFirstStart = false;
 			}
 			esp_mqtt_client_subscribe(client, topic_water[hot_in], 0);
@@ -267,7 +267,7 @@ void mqtt_check_task(void *pvParameter) {
 
 			if (new_certificate) {
 
-				PRINT("-- New certificate MQTT now\n");
+				PRINT("New certificate MQTT now\n");
 				new_certificate = false;
 				mqtt_restart();
 			}
@@ -281,7 +281,7 @@ void mqtt_init() {
 
 	uint8_t mac[6];
 
-	PRINT("-- Initializing mqtt client\n");
+	PRINT("Initializing mqtt client\n");
 
 	mqtt_count_disconnect = 0;
 
@@ -302,21 +302,21 @@ void mqtt_init() {
 }
 
 void mqtt_start() {
-	PRINT("-- Start mqtt client\n");
+	PRINT("Start mqtt client\n");
 	mqtt_count_disconnect = 0;
 	esp_mqtt_client_start(client);
 }
 
 void mqtt_stop() {
 	if (connected) {
-		PRINT("-- Stop mqtt client\n");
+		PRINT("Stop mqtt client\n");
 		esp_mqtt_client_stop(client);
 		connected = false;
 	}
 }
 
 void mqtt_restart() {
-	PRINT("-- Restart mqtt client\n");
+	PRINT("Restart mqtt client\n");
 
 	mqtt_count_disconnect = 0;
 	mqttFirstStart = true;

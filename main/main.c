@@ -54,7 +54,7 @@ void main_task(void *pvParameter) {
 
 			sprintf(buff, "%lu %u", config_get_hotTime(), config_get_hotWater());
 
-			PRINT("-- %s <== %s\n", mqtt_get_topic(hot_out), buff);
+			PRINT("%s <== %s\n", mqtt_get_topic(hot_out), buff);
 
 			if (mqtt_connected()) {
 				if (mqtt_publish(mqtt_get_topic(hot_out), buff) == -1) {
@@ -75,7 +75,7 @@ void main_task(void *pvParameter) {
 
 			sprintf(buff, "%lu %u", config_get_coldTime(), config_get_coldWater());
 
-			PRINT("-- %s <== %s\n", mqtt_get_topic(cold_out), buff);
+			PRINT("%s <== %s\n", mqtt_get_topic(cold_out), buff);
 
 			if (mqtt_connected()) {
 				if (mqtt_publish(mqtt_get_topic(cold_out), buff) == -1) {
@@ -93,7 +93,7 @@ void main_task(void *pvParameter) {
 			subsHotWater = false;
 			sprintf(buff, "%lu %u NEW", config_get_hotTime(), config_get_hotWater());
 
-			PRINT("-- %s <== %s\n", mqtt_get_topic(hot_out), buff);
+			PRINT("%s <== %s\n", mqtt_get_topic(hot_out), buff);
 
 			if (mqtt_connected())
 				mqtt_publish(mqtt_get_topic(hot_out), buff);
@@ -106,7 +106,7 @@ void main_task(void *pvParameter) {
 			subsColdWater = false;
 			sprintf(buff, "%lu %u NEW", config_get_coldTime(), config_get_coldWater());
 
-			PRINT("-- %s <== %s\n", mqtt_get_topic(cold_out), buff);
+			PRINT("%s <== %s\n", mqtt_get_topic(cold_out), buff);
 
 			if (mqtt_connected())
 				mqtt_publish(mqtt_get_topic(cold_out), buff);
@@ -143,9 +143,9 @@ void app_main(void) {
 
     esp_log_set_vprintf((vprintf_like_t)my_vprintf);
 
-    PRINT("-- Startup...\n");
-    PRINT("-- Free memory: %d bytes\n", esp_get_free_heap_size());
-    PRINT("-- IDF version: %s\n", esp_get_idf_version());
+    PRINT("Startup...\n");
+    PRINT("Free memory: %d bytes\n", esp_get_free_heap_size());
+    PRINT("IDF version: %s\n", esp_get_idf_version());
 
 	initDefConfig();
 
