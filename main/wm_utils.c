@@ -18,58 +18,56 @@
 #define DEFAULT_VREF    			1100
 #define SLEEP_COUNT_MAX				5
 
-
 static const char *TAG = "watermeter_util";
 static int sleep_count = 0;
 
 void reset_sleep_count() {
-	sleep_count = 0;
+    sleep_count = 0;
 }
-
 
 static void light_sleep_task(void *pvParameter) {
 
-	const TickType_t xDelay = 2500 / portTICK_PERIOD_MS;
+    const TickType_t xDelay = 2500 / portTICK_PERIOD_MS;
 
-	int power_level;
+    int power_level;
 
     sleep_count = 0;
 
-	for (;;) {
-		power_level = gpio_get_level(EXT_PW_PIN);
+    for (;;) {
+        power_level = gpio_get_level(EXT_PW_PIN);
 
-		if (power_level == 0) {
-			powerLow = true;
-			if (sleep_count < SLEEP_COUNT_MAX) {
-				if (sleep_count == 0) {
-					PRINT("Power low! Preparing for sleep light mode.\n");
-				}
-				sleep_count++;
-			} else {
-				sleepNow = true;
-				if (!dontSleep) {
-					PRINT("Light sleep set now!\n");
-					mqtt_stop();
-					esp_wifi_stop();
-				    vTaskDelay(1000 / portTICK_PERIOD_MS);
-			        esp_sleep_enable_gpio_wakeup();
-			        esp_light_sleep_start();
-			        sleep_count = 1;
-			        PRINT("Awoke from a light sleep\n");
-				}
-			}
-		} else {
-			powerLow = false;
-			if (sleep_count != 0) {
-				PRINT("External power high.\n");
-				sleepNow = false;
-				sleep_count = 0;
-				esp_wifi_start();
-			}
-		}
+        if (power_level == 0) {
+            powerLow = true;
+            if (sleep_count < SLEEP_COUNT_MAX) {
+                if (sleep_count == 0) {
+                    PRINT("Power low! Preparing for sleep light mode.\n");
+                }
+                sleep_count++;
+            } else {
+                sleepNow = true;
+                if (!dontSleep) {
+                    PRINT("Light sleep set now!\n");
+                    mqtt_stop();
+                    esp_wifi_stop();
+                    vTaskDelay(1000 / portTICK_PERIOD_MS);
+                    esp_sleep_enable_gpio_wakeup();
+                    esp_light_sleep_start();
+                    sleep_count = 1;
+                    PRINT("Awoke from a light sleep\n");
+                }
+            }
+        } else {
+            powerLow = false;
+            if (sleep_count != 0) {
+                PRINT("External power high.\n");
+                sleepNow = false;
+                sleep_count = 0;
+                esp_wifi_start();
+            }
+        }
 
-		vTaskDelay(xDelay);
-	}
+        vTaskDelay(xDelay);
+    }
 }
 
 void light_sleep_init() {
@@ -81,31 +79,30 @@ void light_sleep_init() {
     gpio_config_t config_extpower = {
             .pin_bit_mask = BIT64(extpower_gpio_num),
             .mode = GPIO_MODE_INPUT,
-			.pull_down_en = GPIO_PULLDOWN_ENABLE
-    };
-
+            .pull_down_en = GPIO_PULLDOWN_ENABLE };
 
     ESP_ERROR_CHECK(gpio_config(&config_extpower));
     gpio_wakeup_enable(sleep_gpio_num1, GPIO_INTR_LOW_LEVEL);
     gpio_wakeup_enable(sleep_gpio_num2, GPIO_INTR_LOW_LEVEL);
     gpio_wakeup_enable(extpower_gpio_num, GPIO_INTR_HIGH_LEVEL);
 
-	if (!SLEEP_MODE_ON) return;
+    if (!SLEEP_MODE_ON) return;
 
-	xTaskCreate(&light_sleep_task, "light_sleep_task", 2048, NULL, 0, NULL);
+    xTaskCreate(&light_sleep_task, "light_sleep_task", 2048, NULL, 0, NULL);
 }
 
-char *getVoltage() {
+char* getVoltage() {
 
-	const int COUNT = 20;
+    const int COUNT = 20;
 
-	static char buf[32];
-	static esp_adc_cal_characteristics_t adc_chars;
-	const adc1_channel_t VBAT = VBUS;
-	const adc_atten_t atten = ADC_ATTEN_DB_11;
-	const adc_unit_t unit = ADC_UNIT_1;
+    static char buf[32];
+    static esp_adc_cal_characteristics_t adc_chars;
+    const adc1_channel_t VBAT = VBUS
+    ;
+    const adc_atten_t atten = ADC_ATTEN_DB_11;
+    const adc_unit_t unit = ADC_UNIT_1;
 
-	uint32_t adc_reading = 0;
+    uint32_t adc_reading = 0;
 
     adc1_config_width(ADC_WIDTH_BIT_12);
     adc1_config_channel_atten(VBAT, atten);
@@ -118,175 +115,175 @@ char *getVoltage() {
 
     adc_reading /= COUNT;
 
-
     uint32_t voltage = 2 * esp_adc_cal_raw_to_voltage(adc_reading, &adc_chars);
 
-    sprintf(buf, "Battery: %d,%dV", voltage/1000, (voltage%1000)/10);
+    sprintf(buf, "Battery: %d,%dV", voltage / 1000, (voltage % 1000) / 10);
 
-	return buf;
+    return buf;
 }
 
 void strtrim(char *s) {
 
-	/* With begin */
-	int i = 0, j;
-	while ((s[i] == ' ') || (s[i] == '\t')) {
-		i++;
-	}
-	if (i > 0) {
-		for (j = 0; j < strlen(s); j++) {
-			s[j] = s[j + i];
-		}
-		s[j] = '\0';
-	}
+    /* With begin */
+    int i = 0, j;
+    while ((s[i] == ' ') || (s[i] == '\t')) {
+        i++;
+    }
+    if (i > 0) {
+        for (j = 0; j < strlen(s); j++) {
+            s[j] = s[j + i];
+        }
+        s[j] = '\0';
+    }
 
-	/* With end */
-	i = strlen(s) - 1;
-	while ((s[i] == ' ') || (s[i] == '\t')) { /* || (s[i] == '\r') || (s[i] == '\n') */
-		i--;
-	}
-	if (i < (strlen(s) - 1)) {
-		s[i + 1] = '\0';
-	}
+    /* With end */
+    i = strlen(s) - 1;
+    while ((s[i] == ' ') || (s[i] == '\t')) { /* || (s[i] == '\r') || (s[i] == '\n') */
+        i--;
+    }
+    if (i < (strlen(s) - 1)) {
+        s[i + 1] = '\0';
+    }
 }
 
-char *read_file(const char *fileName) {
+char* read_file(const char *fileName) {
 
-	char *rbuff = NULL;
-	FILE *fp;
-	size_t flen;
+    char *rbuff = NULL;
+    FILE *fp;
+    size_t flen;
 
-	if (sdcard || spiffs) {
-		fp = fopen(fileName, "rb");
-		if (fp) {
-			fseek(fp, 0, SEEK_END);
-			flen = ftell(fp);
+    if (sdcard || spiffs) {
+        fp = fopen(fileName, "rb");
+        if (fp) {
+            fseek(fp, 0, SEEK_END);
+            flen = ftell(fp);
 
-			if (flen > 1) {
-				if (flen >= MAX_BUFF_RW) {
-					WM_LOGE(TAG, "The file size is too large. \"%s\" len - %u, more, than %u. (%s:%u)",
-							fileName, flen, MAX_BUFF_RW, __FILE__, __LINE__);
-					fclose(fp);
-					return NULL;
-				}
-			} else {
-				WM_LOGE(TAG, "Empty file - \"%s\". (%s:%u)", fileName, __FILE__, __LINE__);
-				fclose(fp);
-				return NULL;
-			}
+            if (flen > 1) {
+                if (flen >= MAX_BUFF_RW) {
+                    WM_LOGE(TAG,
+                            "The file size is too large. \"%s\" len - %u, more, than %u. (%s:%u)",
+                            fileName, flen, MAX_BUFF_RW, __FILE__, __LINE__);
+                    fclose(fp);
+                    return NULL;
+                }
+            } else {
+                WM_LOGE(TAG, "Empty file - \"%s\". (%s:%u)", fileName, __FILE__, __LINE__);
+                fclose(fp);
+                return NULL;
+            }
 
-			rewind(fp);
+            rewind(fp);
 
-			rbuff = malloc(flen+1);
+            rbuff = malloc(flen + 1);
 
-			if (rbuff == NULL) {
-				WM_LOGE(TAG, "Error allocation memory. (%s:%u)", __FILE__, __LINE__);
-				fclose(fp);
-				return NULL;
-			}
+            if (rbuff == NULL) {
+                WM_LOGE(TAG, "Error allocation memory. (%s:%u)", __FILE__, __LINE__);
+                fclose(fp);
+                return NULL;
+            }
 
-			memset(rbuff, 0, flen+1);
+            memset(rbuff, 0, flen + 1);
 
-			if (fread(rbuff, sizeof(uint8_t), flen, fp) != flen) {
-				WM_LOGE(TAG, "File \"%s\" read error from %s. (%s:%u)", fileName, sdcard ? "sdcard" : "spiffs", __FILE__, __LINE__);
-				fclose(fp);
-				free(rbuff);
-				return NULL;
-			}
+            if (fread(rbuff, sizeof(uint8_t), flen, fp) != flen) {
+                WM_LOGE(TAG, "File \"%s\" read error from %s. (%s:%u)",
+                        fileName, sdcard ? "sdcard" : "spiffs", __FILE__, __LINE__);
+                fclose(fp);
+                free(rbuff);
+                return NULL;
+            }
 
-			fclose(fp);
+            fclose(fp);
 
-		} else {
-			WM_LOGE(TAG, "Cannot open file \"%s\". (%s:%u)", fileName, __FILE__, __LINE__);
-		}
-	} else {
-		WM_LOGE(TAG, "Not initializing sdcard or spiffs. (%s:%u)", __FILE__, __LINE__);
-	}
+        } else {
+            WM_LOGE(TAG, "Cannot open file \"%s\". (%s:%u)", fileName, __FILE__, __LINE__);
+        }
+    } else {
+        WM_LOGE(TAG, "Not initializing sdcard or spiffs. (%s:%u)", __FILE__, __LINE__);
+    }
 
-	return rbuff;
+    return rbuff;
 }
 
 bool write_file(const char *fileName, const char *wbuff, size_t flen) {
 
-	FILE *fp;
-	bool ret = false;
+    FILE *fp;
+    bool ret = false;
 
-	if (sdcard || spiffs) {
-		fp = fopen(fileName, "wb");
-		if (fp) {
-			fseek(fp, 0, SEEK_SET);
-			if (fwrite(wbuff, sizeof(uint8_t), flen, fp) != flen) {
-				WM_LOGE(TAG, "File \"%s\" write error to %s. (%s:%u)", fileName, sdcard ? "sdcard" : "spiffs", __FILE__, __LINE__);
-				fclose(fp);
-				return ret;
-			}
-			ret = true;
-			fclose(fp);
+    if (sdcard || spiffs) {
+        fp = fopen(fileName, "wb");
+        if (fp) {
+            fseek(fp, 0, SEEK_SET);
+            if (fwrite(wbuff, sizeof(uint8_t), flen, fp) != flen) {
+                WM_LOGE(TAG, "File \"%s\" write error to %s. (%s:%u)",
+                        fileName, sdcard ? "sdcard" : "spiffs",
+                        __FILE__, __LINE__);
+                fclose(fp);
+                return ret;
+            }
+            ret = true;
+            fclose(fp);
 
-		} else {
-			WM_LOGE(TAG, "Cannot open file \"%s\". (%s:%u)", fileName, __FILE__, __LINE__);
-		}
-	} else {
-		WM_LOGE(TAG, "Not initializing sdcard or spiffs. (%s:%u)", __FILE__, __LINE__);
-	}
+        } else {
+            WM_LOGE(TAG, "Cannot open file \"%s\". (%s:%u)", fileName, __FILE__, __LINE__);
+        }
+    } else {
+        WM_LOGE(TAG, "Not initializing sdcard or spiffs. (%s:%u)", __FILE__, __LINE__);
+    }
 
-	return ret;
+    return ret;
 }
-
 
 int my_printf(const char *frm, ...) {
 
-	va_list args;
-	char *buff, *out_str;
-	int len_buff = 0;
-	int len_out_str = 0;
+    va_list args;
+    char *buff, *out_str;
+    int len_buff = 0;
+    int len_out_str = 0;
 
-	va_start(args, frm);
+    va_start(args, frm);
 
-	len_buff = vasprintf(&buff, frm, args);
+    len_buff = vasprintf(&buff, frm, args);
 
-	va_end(args);
+    va_end(args);
 
-	if (buff == NULL) return 0;
+    if (buff == NULL)
+        return 0;
 
-	len_out_str = asprintf(&out_str, "-- (%llu) %s", esp_timer_get_time(), buff);
+    len_out_str = asprintf(&out_str, "-- (%llu) %s", esp_timer_get_time(),
+            buff);
 
-	if (out_str == NULL || strstr(buff, "E (")
-						|| strstr(buff, "W (")
-						|| strstr(buff, "I (")
-						|| strstr(buff, "D (")
-						|| strstr(buff, "V (")) {
-		printf(buff);
-		write_to_lstack(buff);
-		return len_buff;
-	}
+    if (out_str == NULL || strstr(buff, "E (") || strstr(buff, "W (") ||
+        strstr(buff, "I (") || strstr(buff, "D (") || strstr(buff, "V (")) {
+        printf(buff);
+        write_to_lstack(buff);
+        return len_buff;
+    }
 
-	printf(out_str);
-	write_to_lstack(out_str);
-	free(buff);
+    printf(out_str);
+    write_to_lstack(out_str);
+    free(buff);
 
-	return len_out_str;
+    return len_out_str;
 }
-
-
 
 int my_vprintf(const char *frm, va_list args) {
 
-	char *buff;
-	int len = 0;
+    char *buff;
+    int len = 0;
 
-	len = vasprintf(&buff, frm, args);
+    len = vasprintf(&buff, frm, args);
 
-	if (buff == NULL) return 0;
+    if (buff == NULL)
+        return 0;
 
 #if ESP_LOG_OUT
 	printf(buff);
 
 	write_to_lstack(buff);
 #else
-	free(buff);
+    free(buff);
 #endif
 
-	return len;
+    return len;
 }
 

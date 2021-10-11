@@ -14,41 +14,39 @@ static const char *TAG = "watermeter_time";
 uint64_t timeStart;
 static char buff[18] = { 0 };
 
-
 void setTimeStart(uint64_t ts) {
-	timeStart = ts;
+    timeStart = ts;
 }
 
 uint64_t getTimeStart() {
-	return timeStart;
+    return timeStart;
 }
 
 void set_time_zone() {
 
-	char time_zone[32];
+    char time_zone[32];
 
-	int8_t tz = config_get_timeZone();
+    int8_t tz = config_get_timeZone();
 
-	if (tz > 0) {
-		sprintf(time_zone, "UTC-%d", tz);
-	} else if (tz < 0) {
-		sprintf(time_zone, "UTC+%d", tz);
-	} else {
-		sprintf(time_zone, "UTC");
-	}
+    if (tz > 0) {
+        sprintf(time_zone, "UTC-%d", tz);
+    } else if (tz < 0) {
+        sprintf(time_zone, "UTC+%d", tz);
+    } else {
+        sprintf(time_zone, "UTC");
+    }
 
-	setenv("TZ", time_zone, 1);
+    setenv("TZ", time_zone, 1);
     tzset();
 }
 
 static void watermeter_time_sync_notification(struct timeval *tv) {
-	ESP_LOGI(TAG, "Notification of a time synchronization event");
+    ESP_LOGI(TAG, "Notification of a time synchronization event");
 }
-
 
 void wm_sntp_init() {
 
-	char *sntp_server = config_get_ntpServerName();
+    char *sntp_server = config_get_ntpServerName();
 
     PRINT("Initializing SNTP. Server: %s, TZ: %d\n", sntp_server, config_get_timeZone());
 
@@ -60,42 +58,42 @@ void wm_sntp_init() {
 }
 
 void sntp_reinit() {
-	sntp_stop();
-	set_time_zone();
-	wm_sntp_init();
+    sntp_stop();
+    set_time_zone();
+    wm_sntp_init();
 }
 
-char *localUpTime() {
+char* localUpTime() {
 
-	char tmp[6] = { 0 };
+    char tmp[6] = { 0 };
 
-	uint32_t secs = esp_timer_get_time() / 1000000, mins = secs / 60;
-	uint16_t hours = mins / 60, days = hours / 24;
+    uint32_t secs = esp_timer_get_time() / 1000000, mins = secs / 60;
+    uint16_t hours = mins / 60, days = hours / 24;
 
-	secs -= mins * 60;
-	mins -= hours * 60;
-	hours -= days * 24;
+    secs -= mins * 60;
+    mins -= hours * 60;
+    hours -= days * 24;
 
-	if (days) {
-		sprintf(tmp, "%ud", days);
-	}
+    if (days) {
+        sprintf(tmp, "%ud", days);
+    }
 
-	sprintf(buff, "%s %02u:%02u:%02u", tmp[0] == 0 ? "" : tmp, hours, mins, secs);
+    sprintf(buff, "%s %02u:%02u:%02u", tmp[0] == 0 ? "" : tmp, hours, mins, secs);
 
-	return buff;
+    return buff;
 }
 
-char *localTimeStr() {
+char* localTimeStr() {
 
-	static char strftime_buf[64];
-	struct tm timeinfo;
-	time_t now;
+    static char strftime_buf[64];
+    struct tm timeinfo;
+    time_t now;
 
-	time(&now);
+    time(&now);
 
-	localtime_r(&now, &timeinfo);
-	strftime(strftime_buf, sizeof(strftime_buf), "Local time: %X %d.%m.%Y", &timeinfo);
+    localtime_r(&now, &timeinfo);
+    strftime(strftime_buf, sizeof(strftime_buf), "Local time: %X %d.%m.%Y", &timeinfo);
 //	strftime(strftime_buf, sizeof(strftime_buf), "%X %d.%m.%Y", &timeinfo);
-	return strftime_buf;
+    return strftime_buf;
 }
 

@@ -3,19 +3,19 @@
 
 #include "wm_global.h"
 
-#define WM_CONFIG_FILE "watermeter.dat"         /* File name of config file		 */
+#define WM_CONFIG_FILE "watermeter.dat"         /* File name of config file         */
 
 /* For config (default settings) */
-#define WEB_ADMIN_LOGIN "Admin"                 /* Login for web Auth                */
-#define WEB_ADMIN_PASSWORD "1111"               /* Password for web Auth             */
-#define AP_SSID "WaterMeter_" MODULE_VERSION    /* Name WiFi AP Mode                 */
-#define AP_PASSWORD "12345678"                  /* Password WiFi AP Mode             */
-#define MQTT_USER "test"                        /* mqtt user                         */
-#define MQTT_PASSWORD "1111"                    /* mqtt password                     */
-#define MQTT_BROKER "192.168.1.1"               /* URL mqtt broker                   */
-#define MQTT_TOPIC "WaterMeter"                 /* Primary mqtt topic name           */
-#define LITERS_PER_PULSE 10                     /* How many liters per one pulse     */
-#define TIME_ZONE 3                             /* Default Time Zone                 */
+#define WEB_ADMIN_LOGIN "Admin"                 /* Login for web Auth               */
+#define WEB_ADMIN_PASSWORD "1111"               /* Password for web Auth            */
+#define AP_SSID "WaterMeter_" MODULE_VERSION    /* Name WiFi AP Mode                */
+#define AP_PASSWORD "12345678"                  /* Password WiFi AP Mode            */
+#define MQTT_USER "test"                        /* mqtt user                        */
+#define MQTT_PASSWORD "1111"                    /* mqtt password                    */
+#define MQTT_BROKER "192.168.1.1"               /* URL mqtt broker                  */
+#define MQTT_TOPIC "WaterMeter"                 /* Primary mqtt topic name          */
+#define LITERS_PER_PULSE 10                     /* How many liters per one pulse    */
+#define TIME_ZONE 3                             /* Default Time Zone                */
 
 #define MAX_WEBADMINLOGIN       16
 #define MAX_WEBADMINPASSWORD    16

@@ -13,28 +13,28 @@
 #define END_TOPIC_COLD_OUT "ColdWater" DELIM "Out"
 #define END_TOPIC_CONTROL "control"
 #define SIZE_END_TOPIC 32
-#define MQTT_TOPIC_SIZE  64
+#define MQTT_TOPIC_SIZE 64
 
 /* For MQTT commands */
-#define CMD_HTTP_RESTART	"http_restart"
-#define CMD_REBOOT			"reboot"
-#define CMD_NEW_CERT		"new_cert_mqtt"
+#define CMD_HTTP_RESTART    "http_restart"
+#define CMD_REBOOT          "reboot"
+#define CMD_NEW_CERT        "new_cert_mqtt"
 
 /* MQTT server port */
 #if MQTT_SSL_ENABLE
-#define MQTT_PORT     8883
+#define MQTT_PORT   8883
 #else
-#define MQTT_PORT     1883
+#define MQTT_PORT   1883
 #endif
 
 
 typedef enum {
-	hot_in = 0,
-	hot_out,
-	cold_in,
-	cold_out,
-	control,
-	topic_name_max
+    hot_in = 0,
+    hot_out,
+    cold_in,
+    cold_out,
+    control,
+    topic_name_max
 } topic_name;
 
 void mqtt_init();
