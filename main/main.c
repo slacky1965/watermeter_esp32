@@ -49,13 +49,10 @@ void main_task(void *pvParameter) {
         if (get_count) {
             reset_sleep_count();
             config_set_hotTime(time(NULL));
-            config_set_hotWater(
-                    config_get_hotWater()
-                            + get_count * config_get_litersPerPulse());
+            config_set_hotWater(config_get_hotWater() + get_count * config_get_litersPerPulse());
             clear_hot_count();
 
-            sprintf(buff, "%lu %u", config_get_hotTime(),
-                    config_get_hotWater());
+            sprintf(buff, "%lu %u", config_get_hotTime(), config_get_hotWater());
 
             PRINT("%s <== %s\n", mqtt_get_topic(hot_out), buff);
 
@@ -73,13 +70,10 @@ void main_task(void *pvParameter) {
         if (get_count) {
             reset_sleep_count();
             config_set_coldTime(time(NULL));
-            config_set_coldWater(
-                    config_get_coldWater()
-                            + get_count * config_get_litersPerPulse());
+            config_set_coldWater(config_get_coldWater() + get_count * config_get_litersPerPulse());
             clear_cold_count();
 
-            sprintf(buff, "%lu %u", config_get_coldTime(),
-                    config_get_coldWater());
+            sprintf(buff, "%lu %u", config_get_coldTime(), config_get_coldWater());
 
             PRINT("%s <== %s\n", mqtt_get_topic(cold_out), buff);
 
@@ -97,13 +91,11 @@ void main_task(void *pvParameter) {
             reset_sleep_count();
 
             subsHotWater = false;
-            sprintf(buff, "%lu %u NEW", config_get_hotTime(),
-                    config_get_hotWater());
+            sprintf(buff, "%lu %u NEW", config_get_hotTime(), config_get_hotWater());
 
             PRINT("%s <== %s\n", mqtt_get_topic(hot_out), buff);
 
-            if (mqtt_connected())
-                mqtt_publish(mqtt_get_topic(hot_out), buff);
+            if (mqtt_connected()) mqtt_publish(mqtt_get_topic(hot_out), buff);
         }
 
         /* If reconfigured counter of cold water */
@@ -111,13 +103,11 @@ void main_task(void *pvParameter) {
             reset_sleep_count();
 
             subsColdWater = false;
-            sprintf(buff, "%lu %u NEW", config_get_coldTime(),
-                    config_get_coldWater());
+            sprintf(buff, "%lu %u NEW", config_get_coldTime(), config_get_coldWater());
 
             PRINT("%s <== %s\n", mqtt_get_topic(cold_out), buff);
 
-            if (mqtt_connected())
-                mqtt_publish(mqtt_get_topic(cold_out), buff);
+            if (mqtt_connected()) mqtt_publish(mqtt_get_topic(cold_out), buff);
         }
         vTaskDelay(xDelay);
     }
