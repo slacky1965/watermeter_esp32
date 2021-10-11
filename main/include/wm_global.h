@@ -5,19 +5,19 @@
 #include "wm_utils.h"
 #include "wm_log.h"
 
-#define PRINT  my_printf						/* Use PRINT instead of printf				*/
-#define WM_LOGE wm_log							/* Use WM_LOGE instead of ESP_LOGE			*/
-#define ESP_LOG_OUT	false						/* false - no msg ESP_LOG*, only PRINT		 */
-#define CRIPTBYTE	0xA3						/* For light crypt configure file	 		 */
+#define PRINT  my_printf                        /* Use PRINT instead of printf				*/
+#define WM_LOGE wm_log                          /* Use WM_LOGE instead of ESP_LOGE			*/
+#define ESP_LOG_OUT	false                       /* false - no msg ESP_LOG*, only PRINT		 */
+#define CRIPTBYTE	0xA3                        /* For light crypt configure file	 		 */
 
-#define SLEEP_MODE_ON false						/* To pass into sleep mode if true   		 */
-#define NOT_READ_EEPROM true					/* Dont't read from EEPROM if true   		 */
+#define SLEEP_MODE_ON false                     /* To pass into sleep mode if true   		 */
+#define NOT_READ_EEPROM true                    /* Dont't read from EEPROM if true   		 */
 
 /* Define pin name */
-#define VBUS 	   ADC1_CHANNEL_7;				/* Pin of get voltage - GPIO35 		 		  */
-#define HOT_PIN    25							/* Pin of hot water - GPIO25         		  */
-#define COLD_PIN   26							/* Pin of cold water - GPIO26      	 		  */
-#define EXT_PW_PIN 16							/* Pin of monitoring external power - GPIO16  */
+#define VBUS 	   ADC1_CHANNEL_7;              /* Pin of get voltage - GPIO35 		 		  */
+#define HOT_PIN    25                           /* Pin of hot water - GPIO25         		  */
+#define COLD_PIN   26                           /* Pin of cold water - GPIO26      	 		  */
+#define EXT_PW_PIN 16                           /* Pin of monitoring external power - GPIO16  */
 
 /* Name and Version */
 #define WEB_WATERMETER_FIRST_NAME "Water"
