@@ -26,22 +26,17 @@
 #define OTA_BUF_LEN	 1024
 
 /* Legal URL web server */
-#define	ROOT 		"/"
-#define	INDEX 		"/index.html"
-#define	CONFIG 		"/config.html"
-#define	UPLOAD 		"/upload.html"
+#define	URL 		"/*"
+#define ROOT        "/"
+#define INDEX       "/index.html"
+#define CONFIG      "/config.html"
+#define SETTINGS    "/settings.html"
+#define LOG         "/log.html"
 #define	UPLHTML 	"/uploadhtml"
 #define	UPDATE	 	"/update"
-#define LOG			"/log.html"
 #if MQTT_SSL_ENABLE
 #define	UPDATECERT 	"/updatecertmqtt"
 #endif
-#define SETTINGS	"/settings.html"
-#define OK			"/ok.html"
-
-/* File extension */
-#define TPL			".tpl"
-#define HTML		".html"
 
 /* Out log color */
 #define COLOR_E "<font color=#FF0000>"	/* error msg	- red		*/
@@ -70,67 +65,32 @@ static esp_err_t webserver_upload_html(httpd_req_t *req);
 static esp_err_t webserver_update_cert_mqtt(httpd_req_t *req);
 static esp_err_t webserver_log(httpd_req_t *req);
 
-static const httpd_uri_t root_html = {
-        .uri = ROOT,
+static const httpd_uri_t uri_html = {
+        .uri = URL,
         .method = HTTP_GET,
-        .handler = webserver_response,
-        .user_ctx = NULL };
-
-static const httpd_uri_t index_html = {
-        .uri = INDEX,
-        .method = HTTP_GET,
-        .handler = webserver_response,
-        .user_ctx = NULL };
-
-static const httpd_uri_t config_html = {
-        .uri = CONFIG,
-        .method = HTTP_GET,
-        .handler = webserver_response,
-        .user_ctx = NULL };
-
-static const httpd_uri_t upload_html = {
-        .uri = UPLOAD,
-        .method = HTTP_GET,
-        .handler = webserver_response,
-        .user_ctx = NULL };
+        .handler = webserver_response };
 
 static const httpd_uri_t update_html = {
         .uri = UPDATE,
         .method = HTTP_POST,
-        .handler = webserver_update,
-        .user_ctx = NULL };
+        .handler = webserver_update };
 
 static const httpd_uri_t uploadhtml_html = {
         .uri = UPLHTML,
         .method = HTTP_POST,
-        .handler = webserver_upload_html,
-        .user_ctx = NULL };
+        .handler = webserver_upload_html };
 
 static const httpd_uri_t log_html = {
         .uri = LOG,
         .method = HTTP_GET,
-        .handler = webserver_log,
-        .user_ctx = NULL };
+        .handler = webserver_log };
 
 #if MQTT_SSL_ENABLE
 static const httpd_uri_t updatecertmqtt_html = {
         .uri = UPDATECERT,
         .method = HTTP_POST,
-        .handler = webserver_update_cert_mqtt,
-        .user_ctx = NULL };
+        .handler = webserver_update_cert_mqtt };
 #endif
-
-static const httpd_uri_t settings_html = {
-        .uri = SETTINGS,
-        .method = HTTP_GET,
-        .handler = webserver_response,
-        .user_ctx = NULL };
-
-static const httpd_uri_t ok_html = {
-        .uri = OK,
-        .method = HTTP_GET,
-        .handler = webserver_response,
-        .user_ctx = NULL };
 
 static char* http_content_type(char *path) {
     char *ext = strrchr(path, '.');
@@ -1005,14 +965,14 @@ static esp_err_t webserver_upload_html(httpd_req_t *req) {
             fflush(stdout);
         }
 
-        PRINT("\n-- File transferred finished: %d bytes\n", recorded_len);
+        printf("\n");
+        PRINT("File transferred finished: %d bytes\n", recorded_len);
 
         fclose(fp);
     }
 
     if (ret == ESP_OK && !err) {
-        sprintf(buf,
-                "<a>Success. File uploaded.</a><br/><br/><a href=\"javascript:history.go(-1)\">Return</a>");
+        sprintf(buf, "<a>Success. File uploaded.</a><br/><br/><a href=\"javascript:history.go(-1)\">Return</a>");
         httpd_resp_sendstr(req, buf);
     } else {
         sprintf(buf, "Failure. Error code: 0x%x\r\n", ret);
@@ -1140,11 +1100,12 @@ static esp_err_t webserver_update(httpd_req_t *req) {
                             global_cont_len -= len;
                         }
                     }
-                    PRINT(".");
+                    printf(".");
                     fflush(stdout);
                 }
 
-                PRINT("\n-- Binary transferred finished: %d bytes\n", global_recv_len);
+                printf("\n");
+                PRINT("Binary transferred finished: %d bytes\n", global_recv_len);
 
                 ret = esp_ota_end(ota_handle);
                 if (ret != ESP_OK) {
@@ -1290,7 +1251,7 @@ static httpd_handle_t webserver_start(void) {
 
     httpd_ssl_config_t https_config = HTTPD_SSL_CONFIG_DEFAULT();
 
-    https_config.httpd.max_uri_handlers = 12;
+    https_config.httpd.uri_match_fn = httpd_uri_match_wildcard;
 
     PRINT("Starting webserver\n");
 
@@ -1307,18 +1268,6 @@ static httpd_handle_t webserver_start(void) {
     if (httpd_ssl_start(&server, &https_config) == ESP_OK) {
         // Set URI handlers
         ESP_LOGI(TAG, "Registering URI handlers");
-        ret = httpd_register_uri_handler(server, &root_html);
-        if (ret != ESP_OK)
-            WM_LOGE(TAG, "URL \"%s\" not registered", root_html.uri);
-        ret = httpd_register_uri_handler(server, &index_html);
-        if (ret != ESP_OK)
-            WM_LOGE(TAG, "URL \"%s\" not registered", index_html.uri);
-        ret = httpd_register_uri_handler(server, &config_html);
-        if (ret != ESP_OK)
-            WM_LOGE(TAG, "URL \"%s\" not registered", config_html.uri);
-        ret = httpd_register_uri_handler(server, &upload_html);
-        if (ret != ESP_OK)
-            WM_LOGE(TAG, "URL \"%s\" not registered", upload_html.uri);
         ret = httpd_register_uri_handler(server, &update_html);
         if (ret != ESP_OK)
             WM_LOGE(TAG, "URL \"%s\" not registered", update_html.uri);
@@ -1333,12 +1282,9 @@ static httpd_handle_t webserver_start(void) {
         if (ret != ESP_OK)
             WM_LOGE(TAG, "URL \"%s\" not registered", updatecertmqtt_html.uri);
 #endif
-        httpd_register_uri_handler(server, &settings_html);
+        ret = httpd_register_uri_handler(server, &uri_html);
         if (ret != ESP_OK)
-            WM_LOGE(TAG, "URL \"%s\" not registered", settings_html.uri);
-        httpd_register_uri_handler(server, &ok_html);
-        if (ret != ESP_OK)
-            WM_LOGE(TAG, "URL \"%s\" not registered", ok_html.uri);
+            WM_LOGE(TAG, "URL \"%s\" not registered", uri_html.uri);
         return server;
     }
 
