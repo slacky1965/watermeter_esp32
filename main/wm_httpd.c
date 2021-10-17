@@ -41,7 +41,7 @@
 /* Out log color */
 #define COLOR_E "<font color=#FF0000>"	/* error msg    - red       */
 #define COLOR_W "<font color=#D2691E>"	/* warning msg  - chocolate */
-#define COLOR_I "<font color=#008000>"	/* info msg	    - green     */
+#define COLOR_I "<font color=#008000>"	/* info msg     - green     */
 #define COLOR_D "<font color=#FFFF00>"	/* debug msg    - yellow    */
 #define COLOR_V "<font color=#EE82EE>"	/* verbose      - violet, bad idea */
 
@@ -247,8 +247,7 @@ static bool webserver_authenticate(httpd_req_t *req) {
                         password++;
                         cfg_login = config_get_webAdminLogin();
                         cfg_password = config_get_webAdminPassword();
-                        if ((strcmp(login, cfg_login) == 0)
-                                & (strcmp(password, cfg_password) == 0)) {
+                        if ((strcmp(login, cfg_login) == 0) & (strcmp(password, cfg_password) == 0)) {
                             ESP_LOGI(TAG, "Basic authenticate is true");
                             login_ok = true;
                         }
@@ -464,9 +463,8 @@ static void webserver_parse_settings_uri(httpd_req_t *req) {
         defaultConfig = false;
         removeConfig();
         if (rebootNow) {
-            PRINT("Rebooting ...\n");
-            vTaskDelay(500 / portTICK_PERIOD_MS);
-            esp_restart();
+            xTaskCreate(&reboot_task, "reboot_task", 2048, NULL, 0, NULL);
+            vTaskDelay(10000 / portTICK_PERIOD_MS);
         }
 
         vTaskDelay(500 / portTICK_PERIOD_MS);
@@ -482,8 +480,7 @@ static void webserver_parse_settings_uri(httpd_req_t *req) {
     if (saveNewConfig) {
 
         if (strcmp(config_get_webAdminLogin(), config.webAdminLogin) != 0
-                || strcmp(config_get_webAdminPassword(),
-                        config.webAdminPassword) != 0
+                || strcmp(config_get_webAdminPassword(), config.webAdminPassword) != 0
                 || config_get_fullSecurity() != config.fullSecurity
                 || config_get_configSecurity() != config.configSecurity)
             newSave = true;
@@ -563,6 +560,7 @@ static void webserver_parse_settings_uri(httpd_req_t *req) {
 
     if (rebootNow) {
         xTaskCreate(&reboot_task, "reboot_task", 2048, NULL, 0, NULL);
+        vTaskDelay(10000 / portTICK_PERIOD_MS);
     }
 
 }
@@ -797,8 +795,7 @@ static esp_err_t webserver_upload_html(httpd_req_t *req) {
     if (len > 1) {
         header = malloc(len);
         if (!header) {
-            WM_LOGE(TAG, "Error allocation memory. (%s:%u)", __FILE__,
-                    __LINE__);
+            WM_LOGE(TAG, "Error allocation memory. (%s:%u)", __FILE__, __LINE__);
             err = "Error allocation memory.";
             ret = ESP_FAIL;
         } else {
@@ -1009,12 +1006,9 @@ static esp_err_t webserver_upload_html(httpd_req_t *req) {
 
     dontSleep = false;
 
-    if (tmpname)
-        free(tmpname);
-    if (newname)
-        free(newname);
-    if (header)
-        free(header);
+    if (tmpname) free(tmpname);
+    if (newname) free(newname);
+    if (header)  free(header);
 
     return ESP_OK;
 }
@@ -1127,7 +1121,8 @@ static esp_err_t webserver_update(httpd_req_t *req) {
 
     if (ret == ESP_OK && !err) {
         sprintf(buf,
-                "<a>Success. Next boot partition is %s. Restart system...</a><br/><br/><a href=\"javascript:history.go(-1)\">Return</a>",
+                "<a>Success. Next boot partition is %s. Restart system...</a><br/><br/>"
+                "<a href=\"javascript:history.go(-1)\">Return</a>",
                 partition->label);
         httpd_resp_sendstr(req, buf);
     } else {
@@ -1298,22 +1293,17 @@ static httpd_handle_t webserver_start(void) {
         // Set URI handlers
         ESP_LOGI(TAG, "Registering URI handlers");
         ret = httpd_register_uri_handler(server, &update_html);
-        if (ret != ESP_OK)
-            WM_LOGE(TAG, "URL \"%s\" not registered", update_html.uri);
+        if (ret != ESP_OK) WM_LOGE(TAG, "URL \"%s\" not registered", update_html.uri);
         ret = httpd_register_uri_handler(server, &uploadhtml_html);
-        if (ret != ESP_OK)
-            WM_LOGE(TAG, "URL \"%s\" not registered", uploadhtml_html.uri);
+        if (ret != ESP_OK) WM_LOGE(TAG, "URL \"%s\" not registered", uploadhtml_html.uri);
         ret = httpd_register_uri_handler(server, &log_html);
-        if (ret != ESP_OK)
-            WM_LOGE(TAG, "URL \"%s\" not registered", log_html.uri);
+        if (ret != ESP_OK) WM_LOGE(TAG, "URL \"%s\" not registered", log_html.uri);
 #if MQTT_SSL_ENABLE
         httpd_register_uri_handler(server, &updatecertmqtt_html);
-        if (ret != ESP_OK)
-            WM_LOGE(TAG, "URL \"%s\" not registered", updatecertmqtt_html.uri);
+        if (ret != ESP_OK) WM_LOGE(TAG, "URL \"%s\" not registered", updatecertmqtt_html.uri);
 #endif
         ret = httpd_register_uri_handler(server, &uri_html);
-        if (ret != ESP_OK)
-            WM_LOGE(TAG, "URL \"%s\" not registered", uri_html.uri);
+        if (ret != ESP_OK) WM_LOGE(TAG, "URL \"%s\" not registered", uri_html.uri);
         return server;
     }
 
