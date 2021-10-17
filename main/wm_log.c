@@ -16,7 +16,7 @@ lstack_elem_t* get_lstack() {
     return lstack;
 }
 
-/* delete color symbols, '\n', '<', '>' from str */
+/* delete color symbols, '\n' from str */
 static char* trim_str_lstack(char *str) {
 
     char *str_dest, *str_source, *pos;
@@ -35,10 +35,10 @@ static char* trim_str_lstack(char *str) {
 
         if (*str_source == '\n')
             str_source++;
-        if (*str_source == '<')
-            str_source++;
-        if (*str_source == '>')
-            str_source++;
+//        if (*str_source == '<')
+//            str_source++;
+//        if (*str_source == '>')
+//            str_source++;
 
         if (str_source != str_dest) {
             *str_dest = *str_source;

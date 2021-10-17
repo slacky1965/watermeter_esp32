@@ -231,8 +231,7 @@ static bool webserver_authenticate(httpd_req_t *req) {
     if (buf_len > 1) {
         buf = malloc(buf_len);
         if (!buf) {
-            WM_LOGE(TAG, "Allocation memory error. (%s:%u)", __FILE__,
-                    __LINE__);
+            WM_LOGE(TAG, "Allocation memory error. (%s:%u)", __FILE__, __LINE__);
             return false;
         }
         if (httpd_req_get_hdr_value_str(req, auth, buf, buf_len) == ESP_OK) {
@@ -1158,6 +1157,34 @@ static esp_err_t webserver_update(httpd_req_t *req) {
     return ESP_OK;
 }
 
+void send_str_log(httpd_req_t *req, char *str) {
+
+    char lt = '<';
+    char gt = '>';
+    char key[] = "<>";
+    char *pos, *pstr = str;
+
+    pos = strpbrk(pstr, key);
+
+    if (pos) {
+    	while(pos) {
+            if (pos-pstr != 1) httpd_resp_send_chunk(req, pstr, strlen(pstr)-strlen(pos));
+            if (*pos == lt) {
+                httpd_resp_send_chunk(req, "&lt", 3);
+            } else if (*pos == gt) {
+                httpd_resp_send_chunk(req, "&gt", 3);
+            }
+            pstr = pos+1;
+            pos = strpbrk(pstr, key);
+    	}
+    }
+
+    if (strlen(pstr)) {
+    	httpd_resp_send_chunk(req, pstr, strlen(pstr));
+    }
+}
+
+
 static esp_err_t webserver_log(httpd_req_t *req) {
 
     esp_err_t ret = ESP_FAIL;
@@ -1222,7 +1249,9 @@ static esp_err_t webserver_log(httpd_req_t *req) {
                 default:
                     break;
                 }
-                httpd_resp_send_chunk(req, lstack->str, HTTPD_RESP_USE_STRLEN);
+
+                send_str_log(req, lstack->str);
+//                httpd_resp_send_chunk(req, lstack->str, HTTPD_RESP_USE_STRLEN);
                 if (color) {
                     httpd_resp_send_chunk(req, end_color,
                             HTTPD_RESP_USE_STRLEN);
