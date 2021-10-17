@@ -39,11 +39,11 @@
 #endif
 
 /* Out log color */
-#define COLOR_E "<font color=#FF0000>"	/* error msg	- red		*/
-#define COLOR_W "<font color=#D2691E>"	/* warning msg	- chocolate	*/
-#define COLOR_I "<font color=#008000>"	/* info msg		- green		*/
-#define COLOR_D "<font color=#FFFF00>"	/* debug msg	- yellow	*/
-#define COLOR_V "<font color=#EE82EE>"	/* verbose		- violet, bad idea */
+#define COLOR_E "<font color=#FF0000>"	/* error msg    - red       */
+#define COLOR_W "<font color=#D2691E>"	/* warning msg  - chocolate */
+#define COLOR_I "<font color=#008000>"	/* info msg	    - green     */
+#define COLOR_D "<font color=#FFFF00>"	/* debug msg    - yellow    */
+#define COLOR_V "<font color=#EE82EE>"	/* verbose      - violet, bad idea */
 
 static char *TAG = "watermeter_httpd";
 
