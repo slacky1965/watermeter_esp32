@@ -39,11 +39,11 @@
 #endif
 
 /* Out log color */
-#define COLOR_E "<font color=#FF0000>"	/* error msg    - red       */
-#define COLOR_W "<font color=#D2691E>"	/* warning msg  - chocolate */
-#define COLOR_I "<font color=#008000>"	/* info msg     - green     */
-#define COLOR_D "<font color=#FFFF00>"	/* debug msg    - yellow    */
-#define COLOR_V "<font color=#EE82EE>"	/* verbose      - violet, bad idea */
+#define COLOR_E "<font color=#FF0000>"	/* error msg    - red               */
+#define COLOR_W "<font color=#D2691E>"	/* warning msg  - chocolate         */
+#define COLOR_I "<font color=#008000>"	/* info msg     - green             */
+#define COLOR_D "<font color=#FFFF00>"	/* debug msg    - yellow            */
+#define COLOR_V "<font color=#EE82EE>"	/* verbose msg  - violet, bad idea  */
 
 static char *TAG = "watermeter_httpd";
 
@@ -94,18 +94,12 @@ static const httpd_uri_t updatecertmqtt_html = {
 
 static char* http_content_type(char *path) {
     char *ext = strrchr(path, '.');
-    if (strcmp(ext, ".html") == 0)
-        return "text/html";
-    if (strcmp(ext, ".tpl") == 0)
-        return "text/html";
-    if (strcmp(ext, ".css") == 0)
-        return "text/css";
-    if (strcmp(ext, ".js") == 0)
-        return "text/javascript";
-    if (strcmp(ext, ".png") == 0)
-        return "image/png";
-    if (strcmp(ext, ".jpg") == 0)
-        return "image/jpeg";
+    if (strcmp(ext, ".html") == 0) return "text/html";
+    if (strcmp(ext, ".tpl") == 0) return "text/html";
+    if (strcmp(ext, ".css") == 0) return "text/css";
+    if (strcmp(ext, ".js") == 0) return "text/javascript";
+    if (strcmp(ext, ".png") == 0) return "image/png";
+    if (strcmp(ext, ".jpg") == 0) return "image/jpeg";
     return "text/plain";
 }
 
@@ -154,17 +148,13 @@ static char* webserver_subst_token_to_response(const char *token) {
     } else if (strcmp(token, "adminpassword") == 0) {
         strcpy(buff, config_get_webAdminPassword());
     } else if (strcmp(token, "fullsecurity") == 0) {
-        if (config_get_fullSecurity())
-            strcpy(buff, "checked");
+        if (config_get_fullSecurity()) strcpy(buff, "checked");
     } else if (strcmp(token, "configsecurity") == 0) {
-        if (config_get_configSecurity())
-            strcpy(buff, "checked");
+        if (config_get_configSecurity()) strcpy(buff, "checked");
     } else if (strcmp(token, "wifistamode") == 0) {
-        if (!config_get_apMode())
-            strcpy(buff, "checked");
+        if (!config_get_apMode()) strcpy(buff, "checked");
     } else if (strcmp(token, "wifiapmode") == 0) {
-        if (config_get_apMode())
-            strcpy(buff, "checked");
+        if (config_get_apMode()) strcpy(buff, "checked");
     } else if (strcmp(token, "wifiapname") == 0) {
         strcpy(buff, config_get_apSsid());
     } else if (strcmp(token, "wifiappassword") == 0) {
@@ -271,7 +261,7 @@ static void reboot_task(void *pvParameter) {
 }
 
 static void webserver_parse_settings_uri(httpd_req_t *req) {
-    char *p, *arg;
+    char *p, *arg, *uri = NULL;
     const char sep[] = "?&";
     watermeter_config_t config;
 
@@ -279,7 +269,16 @@ static void webserver_parse_settings_uri(httpd_req_t *req) {
 
     clearConfig(&config);
 
-    p = (char*) strtok((char*) req->uri, sep);
+    uri = malloc(strlen(req->uri)+1);
+
+    if (uri == NULL) {
+        WM_LOGE(TAG, "Error allocation memory. (%s:%u)", __FILE__, __LINE__);
+        return;
+    }
+
+    strcpy(uri, req->uri);
+
+    p = (char*) strtok(uri, sep);
 
     while (p) {
         arg = (char*) strstr(p, "login");
@@ -318,10 +317,8 @@ static void webserver_parse_settings_uri(httpd_req_t *req) {
 
         arg = (char*) strstr(p, "wifi-mode");
         if (arg) {
-            if (strstr(arg, "station"))
-                config.apMode = false;
-            if (strstr(arg, "ap"))
-                config.apMode = true;
+            if (strstr(arg, "station")) config.apMode = false;
+            if (strstr(arg, "ap")) config.apMode = true;
             p = (char*) strtok(NULL, sep);
             continue;
         }
@@ -473,6 +470,7 @@ static void webserver_parse_settings_uri(httpd_req_t *req) {
         initDefConfig();
 
         startWiFiAP();
+        free(uri);
 
         return;
     }
@@ -563,6 +561,8 @@ static void webserver_parse_settings_uri(httpd_req_t *req) {
         vTaskDelay(10000 / portTICK_PERIOD_MS);
     }
 
+    free(uri);
+    return;
 }
 
 static esp_err_t webserver_read_file(httpd_req_t *req) {
@@ -1209,36 +1209,31 @@ static esp_err_t webserver_log(httpd_req_t *req) {
                 case 'E':
                     if (lstack->str[1] == ' ') {
                         color = true;
-                        httpd_resp_send_chunk(req, COLOR_E,
-                                HTTPD_RESP_USE_STRLEN);
+                        httpd_resp_send_chunk(req, COLOR_E, HTTPD_RESP_USE_STRLEN);
                     }
                     break;
                 case 'W':
                     if (lstack->str[1] == ' ') {
                         color = true;
-                        httpd_resp_send_chunk(req, COLOR_W,
-                                HTTPD_RESP_USE_STRLEN);
+                        httpd_resp_send_chunk(req, COLOR_W, HTTPD_RESP_USE_STRLEN);
                     }
                     break;
                 case 'I':
                     if (lstack->str[1] == ' ') {
                         color = true;
-                        httpd_resp_send_chunk(req, COLOR_I,
-                                HTTPD_RESP_USE_STRLEN);
+                        httpd_resp_send_chunk(req, COLOR_I, HTTPD_RESP_USE_STRLEN);
                     }
                     break;
                 case 'D':
                     if (lstack->str[1] == ' ') {
                         color = true;
-                        httpd_resp_send_chunk(req, COLOR_D,
-                                HTTPD_RESP_USE_STRLEN);
+                        httpd_resp_send_chunk(req, COLOR_D, HTTPD_RESP_USE_STRLEN);
                     }
                     break;
                 case 'V':
                     if (lstack->str[1] == ' ') {
                         color = true;
-                        httpd_resp_send_chunk(req, COLOR_V,
-                                HTTPD_RESP_USE_STRLEN);
+                        httpd_resp_send_chunk(req, COLOR_V, HTTPD_RESP_USE_STRLEN);
                     }
                     break;
                 default:
@@ -1248,8 +1243,7 @@ static esp_err_t webserver_log(httpd_req_t *req) {
                 send_str_log(req, lstack->str);
 //                httpd_resp_send_chunk(req, lstack->str, HTTPD_RESP_USE_STRLEN);
                 if (color) {
-                    httpd_resp_send_chunk(req, end_color,
-                            HTTPD_RESP_USE_STRLEN);
+                    httpd_resp_send_chunk(req, end_color, HTTPD_RESP_USE_STRLEN);
                 }
                 httpd_resp_send_chunk(req, enter, HTTPD_RESP_USE_STRLEN);
             }
