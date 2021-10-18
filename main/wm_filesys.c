@@ -61,7 +61,6 @@ void init_sdcard() {
         .allocation_unit_size = 16 * 1024
     };
 
-
     sdmmc_host_t host = SDSPI_HOST_DEFAULT();
     spi_bus_config_t bus_cfg = {
         .mosi_io_num = PIN_NUM_MOSI,
