@@ -2,25 +2,23 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <errno.h>
-#include <wm_global.h>
-
 #include "esp_log.h"
 #include "esp_spiffs.h"
 #include "esp_vfs_fat.h"
-#include "driver/sdmmc_host.h"
 #include "driver/sdspi_host.h"
 #include "driver/spi_common.h"
 #include "sdmmc_cmd.h"
 
+#include "wm_global.h"
 #include "wm_filesys.h"
 
 static const char *TAG = "watermeter_filesystem";
 
-esp_vfs_spiffs_conf_t conf =
-        { .base_path = MOUNT_POINT_SPIFFS,
-          .partition_label = NULL,
-          .max_files = 5,
-          .format_if_mount_failed = false };
+static esp_vfs_spiffs_conf_t conf = {
+        .base_path = MOUNT_POINT_SPIFFS,
+        .partition_label = NULL,
+        .max_files = 5,
+        .format_if_mount_failed = false };
 
 void init_spiffs() {
 
@@ -50,30 +48,42 @@ void init_sdcard() {
 
     esp_err_t ret;
 
+    sdmmc_card_t *card;
+    const char mount_point[] = MOUNT_POINT_SDCARD;
+
     PRINT("Initializing SD card\n");
 
     ESP_LOGI(TAG, "Using SPI peripheral");
 
+    esp_vfs_fat_sdmmc_mount_config_t mount_config = {
+        .format_if_mount_failed = false,
+        .max_files = 5,
+        .allocation_unit_size = 16 * 1024
+    };
+
+
     sdmmc_host_t host = SDSPI_HOST_DEFAULT();
-    sdspi_slot_config_t slot_config = SDSPI_SLOT_CONFIG_DEFAULT();
-    slot_config.gpio_miso = PIN_NUM_MISO;
-    slot_config.gpio_mosi = PIN_NUM_MOSI;
-    slot_config.gpio_sck = PIN_NUM_CLK;
+    spi_bus_config_t bus_cfg = {
+        .mosi_io_num = PIN_NUM_MOSI,
+        .miso_io_num = PIN_NUM_MISO,
+        .sclk_io_num = PIN_NUM_CLK,
+        .quadwp_io_num = -1,
+        .quadhd_io_num = -1,
+        .max_transfer_sz = 4000,
+    };
+
+    ret = spi_bus_initialize(host.slot, &bus_cfg, SPI_DMA_CHAN);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize bus.");
+        return;
+    }
+
+
+    sdspi_device_config_t slot_config = SDSPI_DEVICE_CONFIG_DEFAULT();
     slot_config.gpio_cs = PIN_NUM_CS;
-    // This initializes the slot without card detect (CD) and write protect (WP) signals.
-    // Modify slot_config.gpio_cd and slot_config.gpio_wp if your board has these signals.
+    slot_config.host_id = host.slot;
 
-    // Options for mounting the filesystem.
-    // If format_if_mount_failed is set to true, SD card will be partitioned and
-    // formatted in case when mounting fails.
-    esp_vfs_fat_sdmmc_mount_config_t mount_config = { .format_if_mount_failed =
-            false, .max_files = 5, .allocation_unit_size = 16 * 1024 };
-
-    sdmmc_card_t *card;
-    const char mount_point[] = MOUNT_POINT_SDCARD;
-
-    ret = esp_vfs_fat_sdmmc_mount(mount_point, &host, &slot_config,
-            &mount_config, &card);
+    ret = esp_vfs_fat_sdspi_mount(mount_point, &host, &slot_config, &mount_config, &card);
 
     if (ret != ESP_OK) {
         if (ret == ESP_FAIL) {
