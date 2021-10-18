@@ -77,8 +77,7 @@ void initDefConfig() {
     watermeter_config.fullSecurity = false;
     watermeter_config.configSecurity = false;
     memset(watermeter_config.staSsid, 0, sizeof(watermeter_config.staSsid));
-    memset(watermeter_config.staPassword, 0,
-            sizeof(watermeter_config.staPassword));
+    memset(watermeter_config.staPassword, 0, sizeof(watermeter_config.staPassword));
     watermeter_config.apMode = true;
     strcpy(watermeter_config.apSsid, AP_SSID);
     strcpy(watermeter_config.apPassword, AP_PASSWORD);
@@ -177,16 +176,13 @@ void removeConfig() {
         if (stat(configFileName, &st) == 0) {
             // Delete it if it exists
             if (unlink(configFileName) != 0) {
-                WM_LOGE(TAG, "Can\'t delete config file \"%s\". (%s:%u)",
-                        configFileName, __FILE__, __LINE__);
+                WM_LOGE(TAG, "Can\'t delete config file \"%s\". (%s:%u)", configFileName, __FILE__, __LINE__);
             } else {
-                ESP_LOGI(TAG, "Config file \"%s\" is delete. (%s:%u)",
-                        configFileName, __FILE__, __LINE__);
+                ESP_LOGI(TAG, "Config file \"%s\" is delete. (%s:%u)", configFileName, __FILE__, __LINE__);
             }
         }
     } else {
-        WM_LOGE(TAG, "Not initializing sdcard or spiffs. (%s:%u)", __FILE__,
-                __LINE__);
+        WM_LOGE(TAG, "Not initializing sdcard or spiffs. (%s:%u)", __FILE__, __LINE__);
     }
 }
 
@@ -204,16 +200,14 @@ bool readConfig() {
             if (fread(&config, 1, sizeof(watermeter_config_t), file)
                     != sizeof(watermeter_config_t)) {
                 WM_LOGE(TAG, "Config file \"%s\" read error from %s! (%s:%u)",
-                        configFileName, sdcard ? "sdcard" : "spiffs", __FILE__,
-                        __LINE__);
+                        configFileName, sdcard ? "sdcard" : "spiffs", __FILE__, __LINE__);
                 fclose(file);
                 return ret;
             }
 
             decriptConfig(&config);
             if (fread(&crc_cfg, 1, sizeof(crc), file) != sizeof(crc)) {
-                WM_LOGE(TAG, "Crc read error from spiffs! (%s:%u)", __FILE__,
-                        __LINE__);
+                WM_LOGE(TAG, "Crc read error from spiffs! (%s:%u)", __FILE__, __LINE__);
                 fclose(file);
                 return ret;
 
@@ -230,12 +224,10 @@ bool readConfig() {
             ret = true;
             PRINT("Config is read from \"%s\" file\n", configFileName);
         } else {
-            WM_LOGE(TAG, "Config file \"%s\" read error! (%s:%u)",
-                    configFileName, __FILE__, __LINE__);
+            WM_LOGE(TAG, "Config file \"%s\" read error! (%s:%u)", configFileName, __FILE__, __LINE__);
         }
     } else {
-        WM_LOGE(TAG, "Not initializing sdcard or spiffs. (%s:%u)", __FILE__,
-                __LINE__);
+        WM_LOGE(TAG, "Not initializing sdcard or spiffs. (%s:%u)", __FILE__, __LINE__);
     }
 
     return ret;
@@ -244,8 +236,7 @@ bool readConfig() {
 void saveConfig() {
 
     uint32_t crc;
-    crc = crc_update((uint8_t*) &watermeter_config,
-            sizeof(watermeter_config_t));
+    crc = crc_update((uint8_t*) &watermeter_config, sizeof(watermeter_config_t));
     watermeter_config_t config;
     memcpy(&config, &watermeter_config, sizeof(watermeter_config_t));
 
@@ -255,28 +246,23 @@ void saveConfig() {
         FILE *file = fopen(configFileName, "wb");
         if (file) {
             fseek(file, 0, 0);
-            if (fwrite(&config, 1, sizeof(watermeter_config_t), file)
-                    != sizeof(watermeter_config_t)) {
+            if (fwrite(&config, 1, sizeof(watermeter_config_t), file) != sizeof(watermeter_config_t)) {
                 WM_LOGE(TAG, "Config file \"%s\" write error to %s! (%s:%u)",
-                        configFileName, sdcard ? "sdcard" : "spiffs", __FILE__,
-                        __LINE__);
+                        configFileName, sdcard ? "sdcard" : "spiffs", __FILE__, __LINE__);
                 fclose(file);
                 return;
             }
             if (fwrite(&crc, 1, sizeof(crc), file) != sizeof(crc)) {
-                WM_LOGE(TAG, "Crc write error to %s! (%s:%u)",
-                        sdcard ? "sdcard" : "spiffs", __FILE__, __LINE__);
+                WM_LOGE(TAG, "Crc write error to %s! (%s:%u)", sdcard ? "sdcard" : "spiffs", __FILE__, __LINE__);
                 fclose(file);
                 return;
             }
             fclose(file);
             PRINT("Save config to %s file\n", configFileName);
         } else
-            WM_LOGE(TAG, "Config file \"%s\" write error! (%s:%u)",
-                    configFileName, __FILE__, __LINE__);
+            WM_LOGE(TAG, "Config file \"%s\" write error! (%s:%u)", configFileName, __FILE__, __LINE__);
     } else {
-        WM_LOGE(TAG, "Not initializing sdcard or spiffs. (%s:%u)", __FILE__,
-                __LINE__);
+        WM_LOGE(TAG, "Not initializing sdcard or spiffs. (%s:%u)", __FILE__, __LINE__);
     }
 }
 
