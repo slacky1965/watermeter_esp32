@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <dirent.h>
 #include <time.h>
 #include <sys/time.h>
 #include "freertos/FreeRTOS.h"
@@ -115,6 +116,9 @@ void main_task(void *pvParameter) {
 
 void app_main(void) {
 
+    bool conf_from_spiffs = false;
+    bool conf_from_sdcard = false;
+
     setTimeStart(esp_timer_get_time());
 
     /* set sharing flags */
@@ -145,8 +149,6 @@ void app_main(void) {
     PRINT("Free memory: %d bytes\n", esp_get_free_heap_size());
     PRINT("IDF version: %s\n", esp_get_idf_version());
 
-    initDefConfig();
-
     set_time_zone();
 
     init_spiffs();
@@ -155,11 +157,32 @@ void app_main(void) {
 
     if (sdcard) {
         set_configFileName(MOUNT_POINT_SDCARD);
-    } else if (spiffs) {
-        set_configFileName(MOUNT_POINT_SPIFFS);
+        if (readConfig()) {
+            conf_from_sdcard = true;
+        }
     }
 
-    if (!readConfig()) {
+    if (spiffs && (!sdcard || !conf_from_sdcard)) {
+        set_configFileName(MOUNT_POINT_SPIFFS);
+        if (readConfig()) {
+            conf_from_spiffs = true;
+        }
+    }
+
+    if (sdcard) {
+        if (conf_from_sdcard) {
+            set_configFileName(MOUNT_POINT_SDCARD);
+        } else {
+            if (spiffs && conf_from_spiffs) {
+                set_configFileName(MOUNT_POINT_SDCARD);
+                saveConfig();
+                conf_from_sdcard = true;
+            }
+        }
+    }
+
+    if (!conf_from_sdcard && !conf_from_spiffs) {
+        initDefConfig();
         firstStart = true;
         saveConfig();
     }
