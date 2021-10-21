@@ -649,9 +649,9 @@ static esp_err_t webserver_response(httpd_req_t *req) {
     if (firstStart && strcmp(req->uri, INDEX) == 0)
         return webserver_redirect(req, CONFIG);
 
-    if (config_get_fullSecurity() || (config_get_configSecurity() && strcmp(req->uri, CONFIG) == 0) ||
+    if (config_get_fullSecurity() ||
+            (config_get_configSecurity() && strcmp(req->uri, CONFIG) == 0) ||
             (config_get_configSecurity() && strcmp(req->uri, UPLOAD) == 0)) {
-printf("auth, uri - %s\n", req->uri);
         if (!webserver_authenticate(req)) {
             webserver_requestAuthentication(req);
             return ESP_OK;
