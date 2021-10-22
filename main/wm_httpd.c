@@ -201,9 +201,10 @@ static void webserver_requestAuthentication(httpd_req_t *req) {
 Server: ESP32 " MODULE_NAME "\r\n\
 Content-Type: text/html; charset=UTF-8\r\n\
 WWW-Authenticate: Basic realm=\"Login Required\"\r\n\
-Content-Length: 0\r\n\
+Content-Length: 33\r\n\
 Access-Control-Allow-Origin: *\r\n\
-\r\n";
+\r\n\
+You need use login and password\r\n";
 
     httpd_send(req, auth, strlen(auth));
     return;
@@ -223,14 +224,13 @@ static bool webserver_authenticate(httpd_req_t *req) {
         buf = malloc(buf_len);
         if (!buf) {
             WM_LOGE(TAG, "Allocation memory error. (%s:%u)", __FILE__, __LINE__);
-            return false;
+            return login_ok;
         }
         if (httpd_req_get_hdr_value_str(req, auth, buf, buf_len) == ESP_OK) {
             if (strncmp(buf, method, strlen(method)) == 0) {
                 pos = buf + strlen(method);
-                if (mbedtls_base64_decode((unsigned char*) &decode,
-                        sizeof(decode), &olen, (unsigned char*) pos,
-                        strlen(pos)) == 0) {
+                if (mbedtls_base64_decode((unsigned char*) &decode, sizeof(decode),
+                        &olen, (unsigned char*) pos, strlen(pos)) == 0) {
                     password = strchr(decode, ':');
                     if (password) {
                         login = decode;
@@ -838,8 +838,7 @@ static esp_err_t webserver_upload_html(httpd_req_t *req) {
                         break;
                     }
 
-                    tmpname = malloc(
-                            strlen(HTML_PATH) + 1 + strlen(filename) + 5);
+                    tmpname = malloc(strlen(HTML_PATH) + 1 + strlen(filename) + 5);
 
                     if (!tmpname) {
                         WM_LOGE(TAG, "Error allocation memory. (%s:%u)", __FILE__, __LINE__);
@@ -849,8 +848,7 @@ static esp_err_t webserver_upload_html(httpd_req_t *req) {
 
                     }
 
-                    newname = malloc(
-                            strlen(HTML_PATH) + 1 + strlen(filename) + 1);
+                    newname = malloc(strlen(HTML_PATH) + 1 + strlen(filename) + 1);
                     if (!newname) {
                         WM_LOGE(TAG, "Error allocation memory. (%s:%u)", __FILE__, __LINE__);
                         err = "Error allocation memory.";
@@ -874,12 +872,13 @@ static esp_err_t webserver_upload_html(httpd_req_t *req) {
 
                     fseek(fp, 0, SEEK_SET);
 
-                    pos = strstr(buf, hdr_end) + strlen(hdr_end);
+                    pos = strstr(buf, hdr_end);
                     if (!pos) {
                         err = "Invalid content type";
                         ret = ESP_FAIL;
                         break;
                     }
+                    pos += strlen(hdr_end);
 
                     PRINT("Loading \"%s\" file\n", filename);
                     PRINT("Please wait");
@@ -887,8 +886,7 @@ static esp_err_t webserver_upload_html(httpd_req_t *req) {
 
                     char *p = strstr(pos, boundary);
                     if (p) {
-                        for (; *p == '-'; p--)
-                            ;
+                        for (; *p == '-'; p--);
                         *(p - 1) = 0;
                         size_t l = strlen(pos);
                         if (fwrite(pos, sizeof(uint8_t), l, fp) != l) {
@@ -911,8 +909,7 @@ static esp_err_t webserver_upload_html(httpd_req_t *req) {
                 } else {
                     pos = strstr(buf, boundary);
                     if (pos) {
-                        for (; *pos == '-'; pos--)
-                            ;
+                        for (; *pos == '-'; pos--);
                         *(pos - 1) = 0;
                         size_t l = strlen(buf);
                         if (fwrite(buf, sizeof(uint8_t), l, fp) != l) {
@@ -935,8 +932,7 @@ static esp_err_t webserver_upload_html(httpd_req_t *req) {
                 if (global_cont_len > 0) {
                     pos = strstr(buf, boundary);
                     if (pos) {
-                        for (; *pos == '-'; pos--)
-                            ;
+                        for (; *pos == '-'; pos--);
                         *(pos - 1) = 0;
                         size_t l = strlen(buf);
                         if (fwrite(buf, sizeof(uint8_t), l, fp) != l) {
@@ -969,12 +965,6 @@ static esp_err_t webserver_upload_html(httpd_req_t *req) {
     if (ret == ESP_OK && !err) {
         sprintf(buf, "<a>Success. File uploaded.</a><br/><br/><a href=\"javascript:history.go(-1)\">Return</a>");
         httpd_resp_sendstr(req, buf);
-    } else {
-        sprintf(buf, "Failure. Error code: 0x%x\r\n", ret);
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, buf);
-    }
-
-    if (ret == ESP_OK && !err) {
 
         struct stat st;
         if (stat(newname, &st) == 0) {
@@ -985,22 +975,25 @@ static esp_err_t webserver_upload_html(httpd_req_t *req) {
             WM_LOGE(TAG, "File rename \"%s\" to \"%s\" failed. (%s:%u)", tmpname, newname, __FILE__, __LINE__);
         }
 
-//    	DIR *dir;
-//    	struct dirent *de;
+//      DIR *dir;
+//      struct dirent *de;
 //
-//    	dir = opendir(HTML_PATH);
+//      dir = opendir(HTML_PATH);
 //
 //
-//    	if (!dir) {
-//    		WM_LOGE(TAG, "open \"%s\"directory failed",  HTML_PATH);
-//    		return ESP_OK;
-//    	}
+//      if (!dir) {
+//          WM_LOGE(TAG, "open \"%s\"directory failed",  HTML_PATH);
+//          return ESP_OK;
+//      }
 //
-//    	while ((de = readdir(dir))) {
-//    		printf("%s\n", de->d_name);
-//    	}
-//    	closedir(dir);
+//      while ((de = readdir(dir))) {
+//          printf("%s\n", de->d_name);
+//      }
+//      closedir(dir);
 
+    } else {
+        sprintf(buf, "Failure. Error code: 0x%x\r\n", ret);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, buf);
     }
 
     dontSleep = false;
