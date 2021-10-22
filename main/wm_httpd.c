@@ -611,11 +611,9 @@ static esp_err_t webserver_read_file(httpd_req_t *req) {
                             //This is an actual token.
                             token[pos_token++] = 0; //zero-terminate token
                             // Call function check token
-                            subst_token = webserver_subst_token_to_response(
-                                    token);
+                            subst_token = webserver_subst_token_to_response(token);
                             if (strlen(subst_token)) {
-                                httpd_resp_send_chunk(req, subst_token,
-                                        strlen(subst_token));
+                                httpd_resp_send_chunk(req, subst_token, strlen(subst_token));
                             }
                         }
                         //Go collect normal chars again.
@@ -725,8 +723,7 @@ static esp_err_t webserver_update_cert_mqtt(httpd_req_t *req) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, err_buff);
     }
 
-    if (buff)
-        free(buff);
+    if (buff) free(buff);
 
     return ESP_OK;
 }
