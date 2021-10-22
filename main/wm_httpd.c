@@ -217,14 +217,14 @@ static bool webserver_authenticate(httpd_req_t *req) {
     char *buf = NULL, *pos, *login, *password, *cfg_login, *cfg_password;
     char decode[MAX_WEBADMINLOGIN + MAX_WEBADMINPASSWORD + 2] = { 0 };
     size_t buf_len, olen;
-    bool login_ok = false;
+    bool login_auth = false;
 
     buf_len = httpd_req_get_hdr_value_len(req, auth) + 1;
     if (buf_len > 1) {
         buf = malloc(buf_len);
         if (!buf) {
             WM_LOGE(TAG, "Allocation memory error. (%s:%u)", __FILE__, __LINE__);
-            return login_ok;
+            return login_auth;
         }
         if (httpd_req_get_hdr_value_str(req, auth, buf, buf_len) == ESP_OK) {
             if (strncmp(buf, method, strlen(method)) == 0) {
@@ -240,7 +240,7 @@ static bool webserver_authenticate(httpd_req_t *req) {
                         cfg_password = config_get_webAdminPassword();
                         if ((strcmp(login, cfg_login) == 0) & (strcmp(password, cfg_password) == 0)) {
                             ESP_LOGI(TAG, "Basic authenticate is true");
-                            login_ok = true;
+                            login_auth = true;
                         }
                     }
                 }
@@ -250,7 +250,7 @@ static bool webserver_authenticate(httpd_req_t *req) {
         }
         free(buf);
     }
-    return login_ok;
+    return login_auth;
 }
 
 static void reboot_task(void *pvParameter) {
