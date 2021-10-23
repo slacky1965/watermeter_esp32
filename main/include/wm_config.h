@@ -27,7 +27,7 @@
 #define MAX_MQTTUSER            16
 #define MAX_MQTTPASSWORD        16
 #define MAX_MQTTTOPIC           64
-#define MAX_NTPSERVERNAME       16
+#define MAX_NTPSERVERNAME       32
 
 /* Structure of config file */
 typedef struct _watermeter_config {
