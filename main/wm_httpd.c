@@ -201,10 +201,10 @@ static void webserver_requestAuthentication(httpd_req_t *req) {
 Server: ESP32 " MODULE_NAME "\r\n\
 Content-Type: text/html; charset=UTF-8\r\n\
 WWW-Authenticate: Basic realm=\"Login Required\"\r\n\
-Content-Length: 33\r\n\
+Content-Length: 97\r\n\
 Access-Control-Allow-Origin: *\r\n\
 \r\n\
-You need use login and password\r\n";
+<a>You need use login and password.</a><br/><br/><a href=\"javascript:history.go(-1)\">Return</a>\r\n";
 
     httpd_send(req, auth, strlen(auth));
     return;
