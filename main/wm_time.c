@@ -12,9 +12,8 @@
 #include "wm_config.h"
 
 static const char *TAG = "watermeter_time";
-uint64_t timeStart;
-static char buff[18] = { 0 };
-esp_event_handler_instance_t instance_got_ip;
+static uint64_t timeStart;
+static esp_event_handler_instance_t instance_got_ip;
 
 void setTimeStart(uint64_t ts) {
     timeStart = ts;
@@ -76,6 +75,7 @@ void sntp_reinitialize() {
 
 char* localUpTime() {
 
+    static char buff[18] = { 0 };
     char tmp[6] = { 0 };
 
     uint32_t secs = esp_timer_get_time() / 1000000, mins = secs / 60;
