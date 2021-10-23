@@ -146,7 +146,7 @@ void strtrim(char *s) {
     }
 }
 
-/* filename - full path and name, exp. - "/spiffs/path/text.html" */
+/* filename - full path and name, ex. - "/spiffs/path/text.html" */
 char* read_file(const char *fileName) {
 
     char *rbuff = NULL;
