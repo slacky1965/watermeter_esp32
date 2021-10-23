@@ -463,6 +463,7 @@ static void webserver_parse_settings_uri(httpd_req_t *req) {
         if (rebootNow) {
             xTaskCreate(&reboot_task, "reboot_task", 2048, NULL, 0, NULL);
             vTaskDelay(10000 / portTICK_PERIOD_MS);
+            for(;;);
         }
 
         vTaskDelay(500 / portTICK_PERIOD_MS);
@@ -505,9 +506,12 @@ static void webserver_parse_settings_uri(httpd_req_t *req) {
             }
         }
 
-        if (strcmp(config_get_ntpServerName(), config.ntpServerName) != 0
-                || config_get_timeZone() != config.timeZone) {
+        if (strcmp(config_get_ntpServerName(), config.ntpServerName) != 0) {
             sntpReInit = true;
+            newSave = true;
+        }
+
+        if (config_get_timeZone() != config.timeZone) {
             newSave = true;
         }
 
@@ -560,6 +564,7 @@ static void webserver_parse_settings_uri(httpd_req_t *req) {
     if (rebootNow) {
         xTaskCreate(&reboot_task, "reboot_task", 2048, NULL, 0, NULL);
         vTaskDelay(10000 / portTICK_PERIOD_MS);
+        for(;;);
     }
 
     free(uri);
