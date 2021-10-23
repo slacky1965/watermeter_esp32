@@ -551,7 +551,7 @@ static void webserver_parse_settings_uri(httpd_req_t *req) {
 
         if (sntpReInit) {
             sntpReInit = false;
-            sntp_reinit();
+            sntp_reinitialize();
         }
 
         saveNewConfig = false;

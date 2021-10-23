@@ -6,8 +6,8 @@
 
 void setTimeStart(uint64_t ts);
 uint64_t getTimeStart();
-void wm_sntp_init();
-void sntp_reinit();
+void sntp_initialize();
+void sntp_reinitialize();
 char *localUpTime();
 char *localTimeStr();
 void set_time_zone();

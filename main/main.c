@@ -202,7 +202,7 @@ void app_main(void) {
     }
 
     webserver_init(HTML_PATH);
-    wm_sntp_init();
+    sntp_initialize();
 
     mqtt_init();
 

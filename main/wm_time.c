@@ -1,10 +1,11 @@
 #include <string.h>
 #include <time.h>
 #include <sys/time.h>
+#include <math.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/event_groups.h"
+#include "esp_event.h"
 #include "esp_log.h"
 #include "esp_sntp.h"
 
@@ -13,6 +14,7 @@
 static const char *TAG = "watermeter_time";
 uint64_t timeStart;
 static char buff[18] = { 0 };
+esp_event_handler_instance_t instance_got_ip;
 
 void setTimeStart(uint64_t ts) {
     timeStart = ts;
@@ -29,9 +31,9 @@ void set_time_zone() {
     int8_t tz = config_get_timeZone();
 
     if (tz > 0) {
-        sprintf(time_zone, "UTC-%d", tz);
+        sprintf(time_zone, "UTC-%d", abs(tz));
     } else if (tz < 0) {
-        sprintf(time_zone, "UTC+%d", tz);
+        sprintf(time_zone, "UTC+%d", abs(tz));
     } else {
         sprintf(time_zone, "UTC");
     }
@@ -44,7 +46,14 @@ static void watermeter_time_sync_notification(struct timeval *tv) {
     ESP_LOGI(TAG, "Notification of a time synchronization event");
 }
 
-void wm_sntp_init() {
+static void sntp_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
+    struct timeval *tv = (struct timeval *)arg;
+    sntp_sync_time(tv);
+}
+
+void sntp_initialize() {
+
+    static struct timeval tv;
 
     char *sntp_server = config_get_ntpServerName();
 
@@ -55,12 +64,14 @@ void wm_sntp_init() {
     sntp_setservername(0, sntp_server);
     sntp_set_time_sync_notification_cb(watermeter_time_sync_notification);
     sntp_init();
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &sntp_handler, &tv, &instance_got_ip));
 }
 
-void sntp_reinit() {
+void sntp_reinitialize() {
     sntp_stop();
+    ESP_ERROR_CHECK(esp_event_handler_instance_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, instance_got_ip));
     set_time_zone();
-    wm_sntp_init();
+    sntp_initialize();
 }
 
 char* localUpTime() {
@@ -88,6 +99,8 @@ char* localTimeStr() {
     static char strftime_buf[64];
     struct tm timeinfo;
     time_t now;
+
+    set_time_zone();
 
     time(&now);
 

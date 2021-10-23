@@ -341,7 +341,7 @@ char* config_get_ntpServerName() {
     return watermeter_config.ntpServerName;
 }
 
-uint8_t config_get_timeZone() {
+int8_t config_get_timeZone() {
     return watermeter_config.timeZone;
 }
 

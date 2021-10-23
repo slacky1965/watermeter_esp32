@@ -71,7 +71,7 @@ char *config_get_mqttUser();
 char *config_get_mqttPassword();
 char *config_get_mqttTopic();
 char *config_get_ntpServerName();
-uint8_t config_get_timeZone();
+int8_t config_get_timeZone();
 uint8_t config_get_litersPerPulse();
 time_t config_get_hotTime();
 void config_set_hotTime(time_t time);
