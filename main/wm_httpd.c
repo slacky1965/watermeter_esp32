@@ -1181,6 +1181,13 @@ static esp_err_t webserver_log(httpd_req_t *req) {
 
     ESP_LOGI(TAG, "Request URI \"%s\"", req->uri);
 
+    if (config_get_fullSecurity() || config_get_configSecurity()) {
+        if (!webserver_authenticate(req)) {
+            webserver_requestAuthentication(req);
+            return ESP_OK;
+        }
+    }
+
     lstack_elem_t *lstack = get_lstack();
 
     ret = webserver_read_file(req);
