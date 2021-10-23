@@ -54,10 +54,12 @@ static void sntp_handler(void *arg, esp_event_base_t event_base, int32_t event_i
     if (sntp_first) {
         sntp_first = false;
         sntp_initialize();
+    } else {
+        gettimeofday(tv, NULL);
+        sntp_sync_time(tv);
+        settimeofday(tv, NULL);
+    //    sntp_set_sync_status(SNTP_SYNC_STATUS_COMPLETED);
     }
-//    sntp_sync_time(tv);
-    settimeofday(tv, NULL);
-    sntp_set_sync_status(SNTP_SYNC_STATUS_COMPLETED);
 }
 
 void sntp_start_handler() {
