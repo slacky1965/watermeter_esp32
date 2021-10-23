@@ -13,7 +13,10 @@
 
 static const char *TAG = "watermeter_time";
 static uint64_t timeStart;
+static bool sntp_first = true;
 static esp_event_handler_instance_t instance_got_ip;
+
+void sntp_initialize();
 
 void setTimeStart(uint64_t ts) {
     timeStart = ts;
@@ -47,12 +50,24 @@ static void watermeter_time_sync_notification(struct timeval *tv) {
 
 static void sntp_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
     struct timeval *tv = (struct timeval *)arg;
-    sntp_sync_time(tv);
+
+    if (sntp_first) {
+        sntp_first = false;
+        sntp_initialize();
+    }
+//    sntp_sync_time(tv);
+    settimeofday(tv, NULL);
+    sntp_set_sync_status(SNTP_SYNC_STATUS_COMPLETED);
+}
+
+void sntp_start_handler() {
+
+    static struct timeval tv;
+
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &sntp_handler, &tv, &instance_got_ip));
 }
 
 void sntp_initialize() {
-
-    static struct timeval tv;
 
     char *sntp_server = config_get_ntpServerName();
 
@@ -63,7 +78,6 @@ void sntp_initialize() {
     sntp_setservername(0, sntp_server);
     sntp_set_time_sync_notification_cb(watermeter_time_sync_notification);
     sntp_init();
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &sntp_handler, &tv, &instance_got_ip));
 }
 
 void sntp_reinitialize() {
@@ -71,6 +85,7 @@ void sntp_reinitialize() {
     ESP_ERROR_CHECK(esp_event_handler_instance_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, instance_got_ip));
     set_time_zone();
     sntp_initialize();
+    sntp_start_handler();
 }
 
 char* localUpTime() {

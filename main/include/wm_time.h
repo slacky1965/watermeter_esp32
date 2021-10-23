@@ -6,7 +6,7 @@
 
 void setTimeStart(uint64_t ts);
 uint64_t getTimeStart();
-void sntp_initialize();
+void sntp_start_handler();
 void sntp_reinitialize();
 char *localUpTime();
 char *localTimeStr();
