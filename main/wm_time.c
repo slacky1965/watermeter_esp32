@@ -113,7 +113,7 @@ char* localUpTime() {
 
 char* localTimeStr() {
 
-    static char strftime_buf[64];
+    static char strftime_buf[32];
     struct tm timeinfo;
     time_t now;
 
@@ -122,8 +122,37 @@ char* localTimeStr() {
     time(&now);
 
     localtime_r(&now, &timeinfo);
-    strftime(strftime_buf, sizeof(strftime_buf), "Local time: %X %d.%m.%Y", &timeinfo);
-//	strftime(strftime_buf, sizeof(strftime_buf), "%X %d.%m.%Y", &timeinfo);
+    strftime(strftime_buf, sizeof(strftime_buf), "%X", &timeinfo);
     return strftime_buf;
 }
 
+char* localDateStr() {
+
+    static char strftime_buf[32];
+    struct tm timeinfo;
+    time_t now;
+
+    set_time_zone();
+
+    time(&now);
+
+    localtime_r(&now, &timeinfo);
+    strftime(strftime_buf, sizeof(strftime_buf), "%d.%m.%Y", &timeinfo);
+    return strftime_buf;
+}
+
+char* localDateTimeStr() {
+
+    static char buff[64];
+
+    sprintf(buff, "%s %s", localTimeStr(), localDateStr());
+    return buff;
+}
+
+suseconds_t get_msec() {
+    struct timeval tv;
+
+    gettimeofday(&tv, NULL);
+
+    return tv.tv_usec/10000;
+}

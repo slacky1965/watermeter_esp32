@@ -143,7 +143,7 @@ static char* webserver_subst_token_to_response(const char *token) {
     } else if (strcmp(token, "rssi") == 0) {
         strcpy(buff, getRssi());
     } else if (strcmp(token, "localtime") == 0) {
-        strcpy(buff, localTimeStr());
+        strcpy(buff, localDateTimeStr());
     } else if (strcmp(token, "adminlogin") == 0) {
         strcpy(buff, config_get_webAdminLogin());
     } else if (strcmp(token, "adminpassword") == 0) {
@@ -1160,7 +1160,7 @@ void send_str_log(httpd_req_t *req, char *str) {
 
     if (pos) {
     	while(pos) {
-            if (pos-pstr != 1) httpd_resp_send_chunk(req, pstr, strlen(pstr)-strlen(pos));
+            if (pos-pstr > 0) httpd_resp_send_chunk(req, pstr, strlen(pstr)-strlen(pos));
             if (*pos == lt) {
                 httpd_resp_send_chunk(req, "&lt", 3);
             } else if (*pos == gt) {
@@ -1245,7 +1245,6 @@ static esp_err_t webserver_log(httpd_req_t *req) {
                 }
 
                 send_str_log(req, lstack->str);
-//                httpd_resp_send_chunk(req, lstack->str, HTTPD_RESP_USE_STRLEN);
                 if (color) {
                     httpd_resp_send_chunk(req, end_color, HTTPD_RESP_USE_STRLEN);
                 }

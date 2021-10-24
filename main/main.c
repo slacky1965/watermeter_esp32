@@ -149,8 +149,6 @@ void app_main(void) {
     PRINT("Free memory: %d bytes\n", esp_get_free_heap_size());
     PRINT("IDF version: %s\n", esp_get_idf_version());
 
-    set_time_zone();
-
     init_spiffs();
 
     init_sdcard();

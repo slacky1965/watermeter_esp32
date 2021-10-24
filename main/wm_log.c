@@ -33,19 +33,11 @@ static char* trim_str_lstack(char *str) {
             }
         }
 
-        if (*str_source == '\n')
-            str_source++;
-//        if (*str_source == '<')
-//            str_source++;
-//        if (*str_source == '>')
-//            str_source++;
+        if (*str_source == '\n') str_source++;
 
-        if (str_source != str_dest) {
-            *str_dest = *str_source;
-        }
+        if (str_source != str_dest) *str_dest = *str_source;
 
-        if (*str_source == '\0')
-            break;
+        if (*str_source == '\0') break;
 
         str_dest++;
         str_source++;
@@ -58,10 +50,27 @@ static char* trim_str_lstack(char *str) {
 bool write_to_lstack(char *str) {
 
     bool ret = false;
+    static bool contin = false;
 
     lstack_elem_t *lstack_new, *lstack_current, *lstack_prev;
 
     if (!str) {
+        return ret;
+    }
+
+    if (contin) {
+        for(lstack_current = lstack; lstack_current->next; lstack_current = lstack_current->next);
+        if (str[strlen(str)-1] == '\n') contin = false;
+        str = trim_str_lstack(str);
+        char *buff = malloc(strlen(lstack_current->str)+strlen(str)+1);
+        if (buff == NULL) {
+            WM_LOGE(TAG, "Error allocation memory. (%s:%u)", __FILE__, __LINE__);
+            return ret;
+        }
+        sprintf(buff, "%s%s", lstack_current->str, str);
+        free(lstack_current->str);
+        lstack_current->str = buff;
+        ret = true;
         return ret;
     }
 
@@ -74,6 +83,7 @@ bool write_to_lstack(char *str) {
 
     memset(lstack_new, 0, sizeof(lstack_elem_t));
 
+    if (str[strlen(str)-1] != '\n') contin = true;
     lstack_new->str = trim_str_lstack(str);
 
     if (!lstack) {
@@ -122,13 +132,13 @@ void wm_log(const char *tag, const char *str, ...) {
     va_end(args);
 
     if (buff == NULL) {
-        PRINT("%sE (%llu) %s: Error writing to the log of watermeter%s\n", WM_LOG_COLOR, esp_timer_get_time(), tag, WM_LOG_COLOR_RESET);
+        PRINT("%sE (%llu) %s: Error writing to the log of watermeter%s\n", WM_LOG_COLOR, esp_log_timestamp(), tag, WM_LOG_COLOR_RESET);
         return;
     }
 
     // "E (823) vfs_fat_sdmmc: slot init failed (0x103)."
 
-    asprintf(&out_str, "%sE (%llu) %s: %s%s\n", WM_LOG_COLOR, esp_timer_get_time(), tag, buff, WM_LOG_COLOR_RESET);
+    asprintf(&out_str, "%sE (%u) %s: %s%s\n", WM_LOG_COLOR, esp_log_timestamp(), tag, buff, WM_LOG_COLOR_RESET);
 
     if (out_str == NULL) {
         PRINT("%s\n", buff);

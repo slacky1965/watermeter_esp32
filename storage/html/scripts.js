@@ -1,5 +1,5 @@
 function TogglePassAdmin() {
-  let btt = password
+  let btt = password;
   if (btt.type === "password") {
     btt.type = "text";
   } else {
@@ -8,13 +8,13 @@ function TogglePassAdmin() {
 }
 
 function TogglePassWiFi() {
-  let btt = wifiappass
+  let btt = wifiappass;
   if (btt.type === "password") {
     btt.type = "text";
   } else {
     btt.type = "password";
   }
-  let btt2 = wifistapass
+  let btt2 = wifistapass;
   if (btt2.type === "password") {
     btt2.type = "text";
   } else {
@@ -23,7 +23,7 @@ function TogglePassWiFi() {
 }
 
 function TogglePassMqtt() {
-  let btt = mqttpass
+  let btt = mqttpass;
   if (btt.type === "password") {
     btt.type = "text";
   } else {

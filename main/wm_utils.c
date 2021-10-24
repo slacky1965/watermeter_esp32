@@ -12,6 +12,7 @@
 
 #include "wm_config.h"
 #include "wm_wifi.h"
+#include "wm_time.h"
 #include "wm_mqtt.h"
 #include "wm_log.h"
 
@@ -237,9 +238,11 @@ bool write_file(const char *fileName, const char *wbuff, size_t flen) {
 int my_printf(const char *frm, ...) {
 
     va_list args;
-    char *buff, *out_str;
+    char *buff, *out_str, ltime[32];
     int len_buff = 0;
     int len_out_str = 0;
+    time_t now;
+    struct tm timeinfo;
 
     va_start(args, frm);
 
@@ -250,11 +253,18 @@ int my_printf(const char *frm, ...) {
     if (buff == NULL)
         return 0;
 
-    len_out_str = asprintf(&out_str, "-- (%llu) %s", esp_timer_get_time(),
-            buff);
+    time(&now);
+    localtime_r(&now, &timeinfo);
+    // Is time set? If not, tm_year will be (1970 - 1900).
+    if (timeinfo.tm_year < (2016 - 1900)) {
+        sprintf(ltime, "%u", esp_log_timestamp());
+    } else {
+        sprintf(ltime, "%s.%.2lu %s", localTimeStr(), get_msec(), localDateStr());
+    }
 
-    if (out_str == NULL || strstr(buff, "E (") || strstr(buff, "W (") ||
-        strstr(buff, "I (") || strstr(buff, "D (") || strstr(buff, "V (")) {
+    len_out_str = asprintf(&out_str, "[%s] %s", ltime, buff);
+
+    if (out_str == NULL || strstr(buff, "E (")) {
         printf(buff);
         write_to_lstack(buff);
         return len_buff;
