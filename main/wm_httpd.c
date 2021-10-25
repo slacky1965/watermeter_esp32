@@ -961,7 +961,7 @@ static esp_err_t webserver_upload_html(httpd_req_t *req) {
             fflush(stdout);
         }
 
-        printf("\n");
+        PRINT("\n");
         PRINT("File transferred finished: %d bytes\n", recorded_len);
 
         fclose(fp);
