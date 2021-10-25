@@ -243,6 +243,7 @@ int my_printf(const char *frm, ...) {
     int len_out_str = 0;
     time_t now;
     struct tm timeinfo;
+    static bool contin = false;
 
     va_start(args, frm);
 
@@ -262,7 +263,17 @@ int my_printf(const char *frm, ...) {
         sprintf(ltime, "%s.%.2lu %s", localTimeStr(), get_msec(), localDateStr());
     }
 
-    len_out_str = asprintf(&out_str, "[%s] %s", ltime, buff);
+    if (contin) {
+        if (buff[strlen(buff)-1] == '\n') {
+            contin = false;
+        }
+        len_out_str = asprintf(&out_str, "%s", buff);
+    } else {
+        len_out_str = asprintf(&out_str, "[%s] %s", ltime, buff);
+        if (buff[strlen(buff)-1] != '\n') {
+            contin = true;
+        }
+    }
 
     if (out_str == NULL || strstr(buff, "E (")) {
         printf(buff);
