@@ -726,6 +726,7 @@ static esp_err_t webserver_update_cert_mqtt(httpd_req_t *req) {
                 "<a>%s. Error code: 0x%x</a><br/><br/><a href=\"javascript:history.go(-1)\">Return</a>",
                 err, ret);
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, err_buff);
+        PRINT("%s\n", err);
     }
 
     if (buff) free(buff);
@@ -1094,7 +1095,7 @@ static esp_err_t webserver_update(httpd_req_t *req) {
                     fflush(stdout);
                 }
 
-                printf("\n");
+                PRINT("\n");
                 PRINT("Binary transferred finished: %d bytes\n", global_recv_len);
 
                 ret = esp_ota_end(ota_handle);
