@@ -77,31 +77,13 @@ static void mqtt_set_config() {
 
 }
 
-static void mqtt_data(const char *topic, size_t topic_len, const char *data,
-        size_t data_len) {
+static void mqtt_data(const char *topic, size_t topic_len, const char *data, size_t data_len) {
 
     char *p, *data_buf = NULL;
     const char snew[] = "NEW";
     uint32_t waterFromServer;
     time_t timeFromServer;
-    uint8_t pos;
-    bool new_cert = false;
-
-    if (strstr(topic, END_TOPIC_CONTROL)) {
-        if (strstr(topic, CMD_HTTP_RESTART)) {
-            webserver_restart();
-            return;
-        } else if (strstr(topic, CMD_REBOOT)) {
-            PRINT("Rebooting ...\n");
-            vTaskDelay(500 / portTICK_PERIOD_MS);
-            esp_restart();
-        }
-#if MQTT_SSL_ENABLE
-        else if (strstr(topic, CMD_NEW_CERT)) {
-            new_cert = true;
-        }
-#endif
-    }
+    size_t pos;
 
     data_buf = malloc(data_len + 1);
 
@@ -113,38 +95,48 @@ static void mqtt_data(const char *topic, size_t topic_len, const char *data,
     memcpy(data_buf, data, data_len);
     data_buf[data_len] = 0;
 
-    if (!new_cert)
-        PRINT("%s ==> %.*s\n", data_buf, topic_len, topic);
-
-    pos = strcspn(data_buf, " ");
-
-    if (pos != strlen(data_buf)) {
-
-        data_buf[pos] = 0;
-        if (!new_cert)
-            timeFromServer = strtoul(data_buf, 0, 10);
-        p = data_buf + pos + 1;
-        strtrim(p);
-
-        if (new_cert) {
-
-            new_cert = false;
-
-            if (strstr(p, CERT_START) && strstr(p, CERT_END)) {
-                if (write_file(MQTTCERT_NAME, p, strlen(p))) {
-                    new_certificate = true;
-                    free(data_buf);
-                    return;
+    if (strstr(topic, END_TOPIC_CONTROL)) {
+        if (strstr(data_buf, CMD_HTTP_RESTART)) {
+            webserver_restart();
+            return;
+        } else if (strstr(data_buf, CMD_REBOOT)) {
+            PRINT("Rebooting ...\n");
+            vTaskDelay(500 / portTICK_PERIOD_MS);
+            esp_restart();
+            for(;;);
+        }
+#if MQTT_SSL_ENABLE
+          else if (strstr(data_buf, CMD_NEW_CERT)) {
+            pos = strcspn(data_buf, " ");
+            if (pos != strlen(data_buf)) {
+                data_buf[pos] = 0;
+                p = data_buf + pos + 1;
+                strtrim(p);
+                if (strstr(p, CERT_START) && strstr(p, CERT_END)) {
+                    if (write_file(MQTTCERT_NAME, p, strlen(p))) {
+                        new_certificate = true;
+                        free(data_buf);
+                        return;
+                    }
+                } else {
+                    WM_LOGE(TAG,
+                            "File from topic \"%s\" is not certificate. (%s:%u)",
+                            topic_water[control], __FILE__, __LINE__);
                 }
-            } else {
-                WM_LOGE(TAG,
-                        "File from topic \"%s\" is not certificate. (%s:%u)",
-                        topic_water[control], __FILE__, __LINE__);
             }
+        }
+#endif
+    } else {
+        pos = strcspn(data_buf, " ");
 
-        } else {
+        if (pos != strlen(data_buf)) {
 
+            data_buf[pos] = 0;
+            timeFromServer = strtoul(data_buf, 0, 10);
+            p = data_buf + pos + 1;
             waterFromServer = strtoul(p, 0, 10);
+
+            PRINT("Received %u liters from the topic %.*s\n", waterFromServer, topic_len, topic);
 
             if (strstr(topic, END_TOPIC_HOT_IN)) {
                 if (strstr(p, snew)) {
@@ -152,8 +144,7 @@ static void mqtt_data(const char *topic, size_t topic_len, const char *data,
                     config_set_hotTime(timeFromServer);
                     saveNewConfig = true;
                 } else if (waterFromServer > config_get_hotWater()) {
-                    config_set_hotWater(
-                            waterFromServer + config_get_litersPerPulse());
+                    config_set_hotWater(waterFromServer + config_get_litersPerPulse());
                     config_set_hotTime(timeFromServer);
                     saveNewConfig = true;
                 }
@@ -163,14 +154,16 @@ static void mqtt_data(const char *topic, size_t topic_len, const char *data,
                     config_set_coldTime(timeFromServer);
                     saveNewConfig = true;
                 } else if (waterFromServer > config_get_coldWater()) {
-                    config_set_coldWater(
-                            waterFromServer + config_get_litersPerPulse());
+                    config_set_coldWater(waterFromServer + config_get_litersPerPulse());
                     config_set_coldTime(timeFromServer);
                     saveNewConfig = true;
                 }
             }
         }
+
     }
+
+
 
     if (saveNewConfig) {
         saveNewConfig = false;
