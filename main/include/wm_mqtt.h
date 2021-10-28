@@ -11,7 +11,7 @@
 #define END_TOPIC_COLD_IN "ColdWater" DELIM "In"
 #define END_TOPIC_HOT_OUT "HotWater" DELIM "Out"
 #define END_TOPIC_COLD_OUT "ColdWater" DELIM "Out"
-#define END_TOPIC_CONTROL "control"
+#define END_TOPIC_CONTROL "Control"
 #define SIZE_END_TOPIC 32
 #define MQTT_TOPIC_SIZE 64
 
