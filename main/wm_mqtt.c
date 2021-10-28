@@ -127,6 +127,7 @@ static void mqtt_data(const char *topic, size_t topic_len, const char *data, siz
         }
 #endif
     } else {
+
         pos = strcspn(data_buf, " ");
 
         if (pos != strlen(data_buf)) {
@@ -136,9 +137,8 @@ static void mqtt_data(const char *topic, size_t topic_len, const char *data, siz
             p = data_buf + pos + 1;
             waterFromServer = strtoul(p, 0, 10);
 
-            PRINT("Received %u liters from the topic %.*s\n", waterFromServer, topic_len, topic);
-
             if (strstr(topic, END_TOPIC_HOT_IN)) {
+                PRINT("Received %u liters of hot water from the topic %.*s\n", waterFromServer, topic_len, topic);
                 if (strstr(p, snew)) {
                     config_set_hotWater(waterFromServer);
                     config_set_hotTime(timeFromServer);
@@ -149,6 +149,7 @@ static void mqtt_data(const char *topic, size_t topic_len, const char *data, siz
                     saveNewConfig = true;
                 }
             } else if (strstr(topic, END_TOPIC_COLD_IN)) {
+                PRINT("Received %u liters of cold water from the topic %.*s\n", waterFromServer, topic_len, topic);
                 if (strstr(p, snew)) {
                     config_set_coldWater(waterFromServer);
                     config_set_coldTime(timeFromServer);
