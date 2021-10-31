@@ -2,6 +2,8 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" charset=utf-8>
+<link rel="icon" href="/favicon.ico" type="image/x-icon">
+<link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
 <title>%platform%. %modulename%</title>
 <style type="text/css">
 div#main {
@@ -40,18 +42,16 @@ div#main {
 <body>
 <div id="main">
 <p>Please upload firmware image *.bin file<p>
-<form method='POST' action='/update' enctype='multipart/form-data'>
-<input type='file' name='update'>
-<input type='submit' value='Update'></form>
+<input id="newbinfile" type="file" onchange="setpath(this)">
+<button id="uploadbin" type="button" onclick="upload(this)">Update</button>
 <p>Please upload certificate for MQTT *.pem file<p>
-<form method='POST' action='/updatecertmqtt' enctype='multipart/form-data'>
-<input type='file' name='updatecertmqtt'>
-<input type='submit' value='Upload cert file'></form>
+<input id="newcertfile" type="file" onchange="setpath(this)">
+<button id="uploadcert" type="button" onclick="upload(this)">Upload cert file</button>
 <p>Please upload html file<p>
-<form method='POST' action='/uploadhtml' enctype='multipart/form-data'>
-<input type='file' name='uploadhtml'>
-<input type='submit' value='Upload html file'></form>
+<input id="newhtmlfile" type="file" onchange="setpath(this)">
+<button id="uploadhtml" type="button" onclick="upload(this)">Upload</button>
 <p><a href="/config.html">Return to Config</a></p>
 </div>
+<script src="/scripts.js "></script>
 </body>
 </html>

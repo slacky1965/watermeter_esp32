@@ -1,11 +1,16 @@
 #include <stdio.h>
 #include <string.h>
 #include <dirent.h>
+#include <sys/param.h>
+#include <sys/unistd.h>
+#include <sys/stat.h>
+
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_wifi.h"
 #include <esp_https_server.h>
+#include "esp_http_server.h"
 #include "esp_log.h"
 #include "mbedtls/base64.h"
 #include "esp_partition.h"
@@ -25,19 +30,20 @@
 /* Buffer for OTA and another load or read from spiffs */
 #define OTA_BUF_LEN	 1024
 
+/* Defined upload path */
+#define PATH_HTML   "/html/"
+#define PATH_CERTS  "/certs/"
+#define PATH_IMAGE  "/image/"
+#define PATH_UPLOAD "/upload/"
+
 /* Legal URL web server */
 #define	URL 		"/*"
 #define ROOT        "/"
 #define INDEX       "/index.html"
 #define CONFIG      "/config.html"
-#define UPLOAD      "/upload.html"
 #define SETTINGS    "/settings.html"
 #define LOG         "/log.html"
-#define	UPLHTML 	"/uploadhtml"
-#define	UPDATE	 	"/update"
-#if MQTT_SSL_ENABLE
-#define	UPDATECERT 	"/updatecertmqtt"
-#endif
+#define UPLOAD      "/upload/*"
 
 /* Out log color */
 #define COLOR_E "<font color=#FF0000>"	/* error msg    - red               */
@@ -61,9 +67,7 @@ static bool sntpReInit = false;
 static bool restartWebServer = false;
 
 static esp_err_t webserver_response(httpd_req_t *req);
-static esp_err_t webserver_update(httpd_req_t *req);
-static esp_err_t webserver_upload_html(httpd_req_t *req);
-static esp_err_t webserver_update_cert_mqtt(httpd_req_t *req);
+static esp_err_t webserver_upload(httpd_req_t *req);
 static esp_err_t webserver_log(httpd_req_t *req);
 
 static const httpd_uri_t uri_html = {
@@ -71,27 +75,15 @@ static const httpd_uri_t uri_html = {
         .method = HTTP_GET,
         .handler = webserver_response };
 
-static const httpd_uri_t update_html = {
-        .uri = UPDATE,
+static const httpd_uri_t upload_html = {
+        .uri = UPLOAD,
         .method = HTTP_POST,
-        .handler = webserver_update };
-
-static const httpd_uri_t uploadhtml_html = {
-        .uri = UPLHTML,
-        .method = HTTP_POST,
-        .handler = webserver_upload_html };
+        .handler = webserver_upload };
 
 static const httpd_uri_t log_html = {
         .uri = LOG,
         .method = HTTP_GET,
         .handler = webserver_log };
-
-#if MQTT_SSL_ENABLE
-static const httpd_uri_t updatecertmqtt_html = {
-        .uri = UPDATECERT,
-        .method = HTTP_POST,
-        .handler = webserver_update_cert_mqtt };
-#endif
 
 static char* http_content_type(char *path) {
     char *ext = strrchr(path, '.');
@@ -674,339 +666,191 @@ static esp_err_t webserver_response(httpd_req_t *req) {
 }
 
 static esp_err_t webserver_update_cert_mqtt(httpd_req_t *req) {
-    esp_err_t ret = ESP_FAIL;
+
     char *buff = NULL;
-    char *err = NULL;
-    const char *hdr_end = "\r\n\r\n";
-    size_t len;
 
-    if (req->content_len > MAX_BUFF_RW + 300) {
-        err = "Certificate file too large";
+    dontSleep = true;
+
+    if (!spiffs) {
+        dontSleep = false;
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Spiffs not mount");
+        return ESP_FAIL;
     }
 
-    if (!err) {
-        buff = malloc(req->content_len + 1);
-        if (!buff) {
-            err = "Error allocation memory";
-        } else {
-            len = httpd_req_recv(req, buff, req->content_len);
-            if (len != req->content_len) {
-                err = "Eror upload certificate";
-            } else {
-                char *pos = strstr(buff, hdr_end) + strlen(hdr_end);
-                if (!pos) {
-                    err = "Invalid content type";
-                } else {
-                    strtrim(pos);
-                    char *p = strstr(pos, CERT_END);
-                    if (!p) {
-                        err = "Uploaded file not sertificate";
-                    } else {
-                        p[strlen(CERT_END) + 1] = 0;
-                        if (strlen(pos) >= MAX_BUFF_RW) {
-                            err = "Certificate file too large";
-                        } else if (!mqtt_new_cert_from_webserver(pos)) {
-                            err = "Uploaded file not sertificate";
-                        } else {
-                            ret = ESP_OK;
-                        }
-                    }
-                }
-            }
-        }
+    if (req->content_len > MAX_BUFF_RW*2) {
+        dontSleep = false;
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Certificate file too large");
+        return ESP_FAIL;
     }
 
-    char err_buff[128];
-    if (ret == ESP_OK && !err) {
-        sprintf(err_buff,
-                "<a>Success. New certificate MQTT is loaded</a><br/><br/><a href=\"javascript:history.go(-1)\">Return</a>");
-        httpd_resp_sendstr(req, err_buff);
-    } else {
-        sprintf(err_buff,
-                "<a>%s. Error code: 0x%x</a><br/><br/><a href=\"javascript:history.go(-1)\">Return</a>",
-                err, ret);
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, err_buff);
-        PRINT("%s\n", err);
+    buff = malloc(req->content_len + 1);
+    if (!buff) {
+        dontSleep = false;
+        WM_LOGE(TAG, "Error allocation memory. (%s:%u)", __FILE__, __LINE__);
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Error allocation memory.");
+        return ESP_FAIL;
     }
 
-    if (buff) free(buff);
+    memset(buff, 0, sizeof(req->content_len + 1));
+
+    size_t len = httpd_req_recv(req, buff, req->content_len);
+    if (len != req->content_len) {
+        dontSleep = false;
+        free(buff);
+        WM_LOGE(TAG, "Error upload certificate. (%s:%u)", __FILE__, __LINE__);
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Error upload certificate.");
+        return ESP_FAIL;
+    }
+
+    if (!mqtt_new_cert_from_webserver(buff)) {
+        dontSleep = false;
+        free(buff);
+        WM_LOGE(TAG, "Uploaded file not sertificate. (%s:%u)", __FILE__, __LINE__);
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Uploaded file not sertificate.");
+        return ESP_FAIL;
+    }
+
+    dontSleep = false;
+    free(buff);
+
+    httpd_resp_sendstr(req, "<a>Success. New certificate MQTT is loaded</a><br/><br/><a href=\"/upload.html\">Return</a>");
 
     return ESP_OK;
 }
 
-static char* filename_from_disp(const char *str) {
-    static char filename[256];
-    const char *token = "filename=";
-    char *pos;
 
-    memset(filename, 0, 256);
 
-    pos = strstr(str, token);
-
-    if (!pos) {
-        return NULL;
-    }
-
-    pos += strlen(token) + 1;
-
-    for (int i = 0; *pos != '"'; i++, pos++) {
-        if (*pos != '"') {
-            filename[i] = *pos;
-        }
-
-    }
-
-    return filename;
-}
-
-static esp_err_t webserver_upload_html(httpd_req_t *req) {
+static esp_err_t webserver_upload_html(httpd_req_t *req, const char *full_name) {
 
     FILE *fp = NULL;
-
-    esp_err_t ret = ESP_OK;
-
-    size_t global_cont_len;
-    size_t len;
-    size_t recorded_len = 0;
-
-    char buf[OTA_BUF_LEN];
-    char *tmpname = NULL;
-    char *newname = NULL;
-    char *filename = NULL;
-    char *header = NULL;
-    char *boundary = NULL;
-    const char *hdr_end = "\r\n\r\n";
-    char *err = NULL;
-    char *pos;
+    size_t global_cont_len, recorded_len = 0;
+    int received;
+    char *tmpname, *newname;
+    char buf[MAX_BUFF_RW];
 
     dontSleep = true;
 
     global_cont_len = req->content_len;
 
-    bool begin = true;
-
     if (!spiffs) {
-        err = "Spiffs not mount";
-        ret = ESP_FAIL;
+        dontSleep = false;
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Spiffs not mount");
+        return ESP_FAIL;
     }
 
     if (get_fs_free_space() < req->content_len) {
-        err = "Upload file too large";
-        ret = ESP_FAIL;
+        dontSleep = false;
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Upload file too large");
+        return ESP_FAIL;
     }
 
-    len = httpd_req_get_hdr_value_len(req, "Content-Type") + 1;
+    tmpname = malloc(strlen(MOUNT_POINT_SPIFFS) + 1 + strlen(full_name) + 5);
 
-    if (len > 1) {
-        header = malloc(len);
-        if (!header) {
-            WM_LOGE(TAG, "Error allocation memory. (%s:%u)", __FILE__, __LINE__);
-            err = "Error allocation memory.";
-            ret = ESP_FAIL;
-        } else {
-            ret = httpd_req_get_hdr_value_str(req, "Content-Type", header, len);
+    if (!tmpname) {
+        dontSleep = false;
+        WM_LOGE(TAG, "Error allocation memory. (%s:%u)", __FILE__, __LINE__);
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Error allocation memory.");
+        return ESP_FAIL;
+    }
 
-            if (ret == ESP_OK) {
-                pos = strstr(header, "boundary=");
-                if (pos) {
-                    boundary = pos + strlen("boundary=");
-                } else {
-                    err = "Invalid content type";
-                    ret = ESP_FAIL;
-                }
-            } else {
-                err = "Invalid content type";
-                ret = ESP_FAIL;
+    newname = malloc(strlen(MOUNT_POINT_SPIFFS) + 1 + strlen(full_name) + 1);
+    if (!newname) {
+        dontSleep = false;
+        free(tmpname);
+        WM_LOGE(TAG, "Error allocation memory. (%s:%u)", __FILE__, __LINE__);
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Error allocation memory.");
+        return ESP_FAIL;
+    }
+
+    sprintf(newname, "%s%s", MOUNT_POINT_SPIFFS, full_name);
+
+    sprintf(tmpname, "%s%s", newname, ".tmp");
+
+    fp = fopen(tmpname, "wb");
+
+    if (!fp) {
+        dontSleep = false;
+        WM_LOGE(TAG, "Failed to create file \"%s\" (%s:%u)", tmpname, __FILE__, __LINE__);
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to create file");
+        return ESP_FAIL;
+    }
+
+    fseek(fp, 0, SEEK_SET);
+
+    PRINT("Loading \"%s\" file\n", full_name);
+    PRINT("Please wait");
+
+    while(global_cont_len) {
+        /* Receive the file part by part into a buffer */
+        if ((received = httpd_req_recv(req, buf, MIN(global_cont_len, MAX_BUFF_RW))) <= 0) {
+            if (received == HTTPD_SOCK_ERR_TIMEOUT) {
+                /* Retry if timeout occurred */
+                continue;
             }
 
+            /* In case of unrecoverable error,
+             * close and delete the unfinished file*/
+            fclose(fp);
+            unlink(tmpname);
+
+            WM_LOGE(TAG, "File reception failed!");
+            /* Respond with 500 Internal Server Error */
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to receive file");
+            free(newname);
+            free(tmpname);
+            dontSleep = false;
+            return ESP_FAIL;
         }
+
+        recorded_len += received;
+
+        /* Write buffer content to file on storage */
+        if (received && (received != fwrite(buf, 1, received, fp))) {
+            /* Couldn't write everything to file!
+             * Storage may be full? */
+            fclose(fp);
+            unlink(tmpname);
+            free(newname);
+            free(tmpname);
+            dontSleep = false;
+
+            ESP_LOGE(TAG, "File write failed!");
+            /* Respond with 500 Internal Server Error */
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to write file to storage");
+            return ESP_FAIL;
+        }
+
+        /* Keep track of remaining size of
+         * the file left to be uploaded */
+        global_cont_len -= received;
+
+        printf(".");
+        fflush(stdout);
     }
 
-    if (!err) {
+    PRINT("\n");
+    PRINT("File transferred finished: %d bytes\n", recorded_len);
 
-        while (global_cont_len) {
-            len = httpd_req_recv(req, buf, OTA_BUF_LEN);
-            if (global_cont_len > OTA_BUF_LEN || begin) {
-                if (begin) {
-                    begin = false;
-                    pos = strstr(buf, "Content-Disposition:");
-                    if (!pos) {
-                        err = "Invalid content type";
-                        ret = ESP_FAIL;
-                        break;
-                    }
+    fclose(fp);
 
-                    filename = filename_from_disp(pos);
+    sprintf(buf, "<a>Success. File uploaded.</a><br/><br/><a href=\"/upload.html\">Return</a>");
+    httpd_resp_sendstr(req, buf);
 
-                    if (!filename) {
-                        err = "Invalid file name";
-                        ret = ESP_FAIL;
-                        break;
-                    }
-
-                    tmpname = malloc(strlen(HTML_PATH) + 1 + strlen(filename) + 5);
-
-                    if (!tmpname) {
-                        WM_LOGE(TAG, "Error allocation memory. (%s:%u)", __FILE__, __LINE__);
-                        err = "Error allocation memory.";
-                        ret = ESP_FAIL;
-                        break;
-
-                    }
-
-                    newname = malloc(strlen(HTML_PATH) + 1 + strlen(filename) + 1);
-                    if (!newname) {
-                        WM_LOGE(TAG, "Error allocation memory. (%s:%u)", __FILE__, __LINE__);
-                        err = "Error allocation memory.";
-                        ret = ESP_FAIL;
-                        break;
-
-                    }
-
-                    sprintf(newname, "%s%s%s", HTML_PATH, DELIM, filename);
-
-                    sprintf(tmpname, "%s%s", newname, ".tmp");
-
-                    fp = fopen(tmpname, "wb");
-
-                    if (!fp) {
-                        WM_LOGE(TAG, "Cannot open file \"%s\" (%s:%u)", tmpname, __FILE__, __LINE__);
-                        err = "Cannot open file";
-                        ret = ESP_FAIL;
-                        break;
-                    }
-
-                    fseek(fp, 0, SEEK_SET);
-
-                    pos = strstr(buf, hdr_end);
-                    if (!pos) {
-                        err = "Invalid content type";
-                        ret = ESP_FAIL;
-                        break;
-                    }
-                    pos += strlen(hdr_end);
-
-                    PRINT("Loading \"%s\" file\n", filename);
-                    PRINT("Please wait");
-                    vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-                    char *p = strstr(pos, boundary);
-                    if (p) {
-                        for (; *p == '-'; p--);
-                        *(p - 1) = 0;
-                        size_t l = strlen(pos);
-                        if (fwrite(pos, sizeof(uint8_t), l, fp) != l) {
-                            err = "Error wtite file";
-                            ret = ESP_FAIL;
-                            break;
-                        }
-                        recorded_len += l;
-
-                    } else {
-                        size_t plen = len - (pos - buf);
-                        if (fwrite(pos, sizeof(uint8_t), plen, fp) != plen) {
-                            err = "Error wtite file";
-                            ret = ESP_FAIL;
-                            break;
-                        }
-                        recorded_len += plen;
-                    }
-
-                } else {
-                    pos = strstr(buf, boundary);
-                    if (pos) {
-                        for (; *pos == '-'; pos--);
-                        *(pos - 1) = 0;
-                        size_t l = strlen(buf);
-                        if (fwrite(buf, sizeof(uint8_t), l, fp) != l) {
-                            err = "Error wtite file";
-                            ret = ESP_FAIL;
-                            break;
-                        }
-                        recorded_len += l;
-                    } else {
-                        if (fwrite(buf, sizeof(uint8_t), len, fp) != len) {
-                            err = "Error wtite file";
-                            ret = ESP_FAIL;
-                            break;
-                        }
-                        recorded_len += len;
-                    }
-                }
-                global_cont_len -= len;
-            } else {
-                if (global_cont_len > 0) {
-                    pos = strstr(buf, boundary);
-                    if (pos) {
-                        for (; *pos == '-'; pos--);
-                        *(pos - 1) = 0;
-                        size_t l = strlen(buf);
-                        if (fwrite(buf, sizeof(uint8_t), l, fp) != l) {
-                            err = "Error wtite file";
-                            ret = ESP_FAIL;
-                            break;
-                        }
-                        recorded_len += l;
-                    } else {
-                        if (fwrite(buf, sizeof(uint8_t), len, fp) != len) {
-                            err = "Error wtite file";
-                            ret = ESP_FAIL;
-                            break;
-                        }
-                        recorded_len += len;
-                    }
-                    global_cont_len -= len;
-                }
-            }
-            printf(".");
-            fflush(stdout);
-        }
-
-        PRINT("\n");
-        PRINT("File transferred finished: %d bytes\n", recorded_len);
-
-        fclose(fp);
+    struct stat st;
+    if (stat(newname, &st) == 0) {
+        unlink(newname);
     }
 
-    if (ret == ESP_OK && !err) {
-        sprintf(buf, "<a>Success. File uploaded.</a><br/><br/><a href=\"javascript:history.go(-1)\">Return</a>");
-        httpd_resp_sendstr(req, buf);
-
-        struct stat st;
-        if (stat(newname, &st) == 0) {
-            unlink(newname);
-        }
-
-        if (rename(tmpname, newname) != 0) {
-            WM_LOGE(TAG, "File rename \"%s\" to \"%s\" failed. (%s:%u)", tmpname, newname, __FILE__, __LINE__);
-        }
-
-//      DIR *dir;
-//      struct dirent *de;
-//
-//      dir = opendir(HTML_PATH);
-//
-//
-//      if (!dir) {
-//          WM_LOGE(TAG, "open \"%s\"directory failed",  HTML_PATH);
-//          return ESP_OK;
-//      }
-//
-//      while ((de = readdir(dir))) {
-//          printf("%s\n", de->d_name);
-//      }
-//      closedir(dir);
-
-    } else {
-        sprintf(buf, "Failure. Error code: 0x%x\r\n", ret);
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, buf);
+    if (rename(tmpname, newname) != 0) {
+        WM_LOGE(TAG, "File rename \"%s\" to \"%s\" failed. (%s:%u)", tmpname, newname, __FILE__, __LINE__);
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to rename file");
+        free(newname);
+        free(tmpname);
+        return ESP_FAIL;
     }
 
-    dontSleep = false;
-
-    if (tmpname) free(tmpname);
-    if (newname) free(newname);
-    if (header)  free(header);
+    free(tmpname);
+    free(newname);
 
     return ESP_OK;
 }
@@ -1022,130 +866,157 @@ static esp_err_t webserver_update(httpd_req_t *req) {
     size_t global_recv_len = 0;
 
     char buf[OTA_BUF_LEN];
-    const char *hdr_end = "\r\n\r\n";
-    char *err = NULL;
+    char *err;
 
     dontSleep = true;
 
     global_cont_len = req->content_len;
 
-//    ESP_LOGI(TAG, "Content length: %d", global_cont_len);
-
     partition = esp_ota_get_next_update_partition(NULL);
 
-    bool begin = true;
-
     if (partition) {
-
         if (partition->size < req->content_len) {
             err = "Firmware image too large";
-            ret = ESP_FAIL;
-//			PRINT("part_size: %d, cont_len: %d\n", partition->size, req->content_len);
+            WM_LOGE(TAG, err);
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, err);
+            dontSleep = false;
+            return ESP_FAIL;
         }
 
-        if (!err) {
-
-            ret = esp_ota_begin(partition, OTA_SIZE_UNKNOWN, &ota_handle);
-            if (ret == ESP_OK) {
-                while (global_cont_len) {
-                    len = httpd_req_recv(req, buf, OTA_BUF_LEN);
-                    if (global_cont_len > OTA_BUF_LEN || begin) {
-                        if (begin) {
-                            begin = false;
-                            char *pos = strstr(buf, hdr_end) + strlen(hdr_end);
-                            if (!pos) {
-                                err = "Invalid content type";
-                                ret = ESP_FAIL;
-                                break;
-                            }
-
-                            PRINT("Writing to partition name \"%s\" subtype %d at offset 0x%x\n",
-                                  partition->label, partition->subtype, partition->address);
-                            PRINT("Please wait");
-                            vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-                            size_t plen = len - (pos - buf);
-                            ret = esp_ota_write(ota_handle, (void*) pos, plen);
-                            if (ret != ESP_OK) {
-                                err = "esp_ota_write return error";
-                                break;
-                            }
-                            global_recv_len += plen;
-                        } else {
-                            ret = esp_ota_write(ota_handle, (void*) buf, len);
-                            if (ret != ESP_OK) {
-                                err = "esp_ota_write return error";
-                                break;
-                            }
-                            global_recv_len += len;
+        ret = esp_ota_begin(partition, OTA_SIZE_UNKNOWN, &ota_handle);
+        if (ret == ESP_OK) {
+            bool begin = true;
+            while(global_cont_len) {
+                len = httpd_req_recv(req, buf, MIN(global_cont_len, OTA_BUF_LEN));
+                if (len) {
+                    if (begin) {
+                        begin = false;
+                        if (buf[0] != 233) {
+                            err = "Invalid flash image type";
+                            WM_LOGE(TAG, err);
+                            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, err);
+                            dontSleep = false;
+                            return ESP_FAIL;
                         }
-                        global_cont_len -= len;
-                    } else {
-                        if (global_cont_len > 0) {
-                            ret = esp_ota_write(ota_handle, (void*) buf, len);
-                            if (ret != ESP_OK) {
-                                err = "esp_ota_write return error";
-                                break;
-                            }
-                            global_recv_len += len;
-                            global_cont_len -= len;
-                        }
+                        PRINT("Writing to partition name \"%s\" subtype %d at offset 0x%x\n",
+                              partition->label, partition->subtype, partition->address);
+                        PRINT("Please wait");
+                        vTaskDelay(1000 / portTICK_PERIOD_MS);
                     }
+                    ret = esp_ota_write(ota_handle, (void*)buf, len);
+                    if (ret != ESP_OK) {
+                        err = "esp_ota_write() return error";
+                        WM_LOGE(TAG, err);
+                        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, err);
+                        dontSleep = false;
+                        return ESP_FAIL;
+                    }
+                    global_recv_len += len;
+                    global_cont_len -= len;
                     printf(".");
                     fflush(stdout);
                 }
-
-                PRINT("\n");
-                PRINT("Binary transferred finished: %d bytes\n", global_recv_len);
-
-                ret = esp_ota_end(ota_handle);
-                if (ret != ESP_OK) {
-                    err = "esp_ota_end return error";
-                }
             }
+            PRINT("\n");
+            PRINT("Binary transferred finished: %d bytes\n", global_recv_len);
+
+            ret = esp_ota_end(ota_handle);
+            if (ret != ESP_OK) {
+                err = "esp_ota_end() return error";
+                WM_LOGE(TAG, err);
+                httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, err);
+                dontSleep = false;
+                return ESP_FAIL;
+            }
+            ret = esp_ota_set_boot_partition(partition);
+            if (ret != ESP_OK) {
+                err = "Set boot partition is error";
+                WM_LOGE(TAG, err);
+                httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, err);
+                dontSleep = false;
+                return ESP_FAIL;
+            }
+            sprintf(buf,
+                    "<a>Success. Next boot partition is %s. Restart system...</a><br/><br/><a href=\"javascript:history.go(-1)\">Return</a>",
+                    partition->label);
+            httpd_resp_sendstr(req, buf);
+
+            mqtt_stop();
+            esp_wifi_disconnect();
+
+            const esp_partition_t *boot_partition = esp_ota_get_boot_partition();
+            PRINT("Next boot partition \"%s\" name subtype %d at offset 0x%x\n",
+                  boot_partition->label, boot_partition->subtype, boot_partition->address);
+            PRINT("Prepare to restart system!\n\n\n\n");
+
+            vTaskDelay(2000 / portTICK_PERIOD_MS);
+
+            esp_restart();
+
+        } else {
+            err = "Partition error";
+            WM_LOGE(TAG, err);
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, err);
+            dontSleep = false;
+            return ESP_FAIL;
+
         }
+
+
     } else {
         err = "No partiton";
-        ret = ESP_FAIL;
-    }
-
-    if (!err) {
-        ret = esp_ota_set_boot_partition(partition);
-    } else {
-        sprintf(buf, "%s 0x%x", err, ret);
-        WM_LOGE(TAG, "%s. (%s:%u)", buf, __FILE__, __LINE__);
-        ret = ESP_FAIL;
-    }
-
-    if (ret == ESP_OK && !err) {
-        sprintf(buf,
-                "<a>Success. Next boot partition is %s. Restart system...</a><br/><br/>"
-                "<a href=\"javascript:history.go(-1)\">Return</a>",
-                partition->label);
-        httpd_resp_sendstr(req, buf);
-    } else {
-        sprintf(buf, "Failure. Error code: 0x%x\r\n", ret);
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, buf);
-    }
-
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-    if (ret == ESP_OK && !err) {
-
-        mqtt_stop();
-        esp_wifi_disconnect();
-
-        const esp_partition_t *boot_partition = esp_ota_get_boot_partition();
-        PRINT("Next boot partition \"%s\" name subtype %d at offset 0x%x\n",
-              boot_partition->label, boot_partition->subtype, boot_partition->address);
-        PRINT("Prepare to restart system!\n--\n--\n\n");
-
-        vTaskDelay(2000 / portTICK_PERIOD_MS);
-
-        esp_restart();
+        WM_LOGE(TAG, err);
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, err);
+        dontSleep = false;
+        return ESP_FAIL;
     }
 
     dontSleep = false;
+
+    return ESP_OK;
+}
+
+
+static esp_err_t webserver_upload(httpd_req_t *req) {
+
+    const char *full_path;
+
+    full_path = req->uri+strlen(PATH_UPLOAD)-1;
+
+    if (strncmp(full_path, PATH_HTML, strlen(PATH_HTML)) == 0) {
+        if (strlen(full_path+strlen(PATH_HTML)) >= CONFIG_FATFS_MAX_LFN) {
+            /* Respond with 500 Internal Server Error */
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Filename too long");
+            return ESP_FAIL;
+        }
+
+        return webserver_upload_html(req, full_path);
+
+    } else if (strncmp(full_path, PATH_CERTS, strlen(PATH_CERTS)) == 0) {
+        if (strlen(full_path+strlen(PATH_CERTS)) >= CONFIG_FATFS_MAX_LFN) {
+            /* Respond with 500 Internal Server Error */
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Filename too long");
+            return ESP_FAIL;
+        }
+
+        return webserver_update_cert_mqtt(req);
+
+    } else if (strncmp(full_path, PATH_IMAGE, strlen(PATH_IMAGE)) == 0) {
+        if (strlen(full_path+strlen(PATH_IMAGE)) >= CONFIG_FATFS_MAX_LFN) {
+            /* Respond with 500 Internal Server Error */
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Filename too long");
+            return ESP_FAIL;
+        }
+
+        return webserver_update(req);
+
+    } else {
+        WM_LOGE(TAG, "Invalid path: %s", req->uri);
+        /* Respond with 400 Bad Request */
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid path");
+        return ESP_FAIL;
+    }
+
 
     return ESP_OK;
 }
@@ -1290,16 +1161,10 @@ static httpd_handle_t webserver_start(void) {
     if (httpd_ssl_start(&server, &https_config) == ESP_OK) {
         // Set URI handlers
         ESP_LOGI(TAG, "Registering URI handlers");
-        ret = httpd_register_uri_handler(server, &update_html);
-        if (ret != ESP_OK) WM_LOGE(TAG, "URL \"%s\" not registered", update_html.uri);
-        ret = httpd_register_uri_handler(server, &uploadhtml_html);
-        if (ret != ESP_OK) WM_LOGE(TAG, "URL \"%s\" not registered", uploadhtml_html.uri);
+        ret = httpd_register_uri_handler(server, &upload_html);
+        if (ret != ESP_OK) WM_LOGE(TAG, "URL \"%s\" not registered", upload_html.uri);
         ret = httpd_register_uri_handler(server, &log_html);
         if (ret != ESP_OK) WM_LOGE(TAG, "URL \"%s\" not registered", log_html.uri);
-#if MQTT_SSL_ENABLE
-        httpd_register_uri_handler(server, &updatecertmqtt_html);
-        if (ret != ESP_OK) WM_LOGE(TAG, "URL \"%s\" not registered", updatecertmqtt_html.uri);
-#endif
         ret = httpd_register_uri_handler(server, &uri_html);
         if (ret != ESP_OK) WM_LOGE(TAG, "URL \"%s\" not registered", uri_html.uri);
         return server;
