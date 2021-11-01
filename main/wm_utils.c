@@ -147,12 +147,12 @@ void strtrim(char *s) {
     }
 }
 
-/* filename - full path and name, ex. - "/spiffs/path/text.html" */
+/* filename - full path and name, ex. - "/spiffs/path/text.txt" */
 char* read_file(const char *fileName) {
 
     char *rbuff = NULL;
     FILE *fp;
-    size_t flen;
+    size_t flen, max_len = MAX_BUFF_RW*100;
 
     if (sdcard || spiffs) {
         fp = fopen(fileName, "rb");
@@ -160,11 +160,11 @@ char* read_file(const char *fileName) {
             fseek(fp, 0, SEEK_END);
             flen = ftell(fp);
 
-            if (flen > 1) {
-                if (flen >= MAX_BUFF_RW) {
+            if (flen > 0) {
+                if (flen >= max_len) {
                     WM_LOGE(TAG,
                             "The file size is too large. \"%s\" len - %u, more, than %u. (%s:%u)",
-                            fileName, flen, MAX_BUFF_RW, __FILE__, __LINE__);
+                            fileName, flen, max_len, __FILE__, __LINE__);
                     fclose(fp);
                     return NULL;
                 }
