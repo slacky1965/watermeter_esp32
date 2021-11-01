@@ -93,6 +93,7 @@ static char* http_content_type(char *path) {
     if (strcmp(ext, ".js") == 0) return "text/javascript";
     if (strcmp(ext, ".png") == 0) return "image/png";
     if (strcmp(ext, ".jpg") == 0) return "image/jpeg";
+    if (strcmp(ext, ".ico") == 0) return "image/x-icon";
     return "text/plain";
 }
 
@@ -677,7 +678,7 @@ static esp_err_t webserver_update_cert_mqtt(httpd_req_t *req) {
         return ESP_FAIL;
     }
 
-    if (req->content_len > MAX_BUFF_RW*2) {
+    if (req->content_len > MAX_BUFF_RW*4) {
         dontSleep = false;
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Certificate file too large");
         return ESP_FAIL;
@@ -947,11 +948,11 @@ static esp_err_t webserver_update(httpd_req_t *req) {
             const esp_partition_t *boot_partition = esp_ota_get_boot_partition();
             PRINT("Next boot partition \"%s\" name subtype %d at offset 0x%x\n",
                   boot_partition->label, boot_partition->subtype, boot_partition->address);
-            PRINT("Prepare to restart system!\n\n\n\n");
-
-            vTaskDelay(2000 / portTICK_PERIOD_MS);
+            PRINT("Prepare to restart system!\n");
+            PRINT("Rebooting...\n");
 
             esp_restart();
+            for(;;);
 
         } else {
             err = "Partition error";
@@ -1030,17 +1031,16 @@ void send_str_log(httpd_req_t *req, char *str) {
 
     pos = strpbrk(pstr, key);
 
-    if (pos) {
-    	while(pos) {
-            if (pos-pstr > 0) httpd_resp_send_chunk(req, pstr, strlen(pstr)-strlen(pos));
-            if (*pos == lt) {
-                httpd_resp_send_chunk(req, "&lt", 3);
-            } else if (*pos == gt) {
-                httpd_resp_send_chunk(req, "&gt", 3);
-            }
-            pstr = pos+1;
-            pos = strpbrk(pstr, key);
-    	}
+    while (pos) {
+        if (pos - pstr > 0)
+            httpd_resp_send_chunk(req, pstr, strlen(pstr) - strlen(pos));
+        if (*pos == lt) {
+            httpd_resp_send_chunk(req, "&lt", 3);
+        } else if (*pos == gt) {
+            httpd_resp_send_chunk(req, "&gt", 3);
+        }
+        pstr = pos + 1;
+        pos = strpbrk(pstr, key);
     }
 
     if (strlen(pstr)) {
