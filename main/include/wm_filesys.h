@@ -5,6 +5,7 @@
 #define MOUNT_POINT_SPIFFS  "/spiffs"
 #define MOUNT_POINT_SDCARD  "/sdcard"
 #define DELIM               "/"
+#define DELIM_CHR           '/'
 
 /* Certs file name */
 #define CERTS_PATH          MOUNT_POINT_SPIFFS DELIM "certs" DELIM
