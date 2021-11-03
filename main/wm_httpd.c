@@ -706,7 +706,7 @@ static esp_err_t webserver_update_cert_mqtt(httpd_req_t *req) {
     if (!mqtt_new_cert_from_webserver(buff)) {
         dontSleep = false;
         free(buff);
-        WM_LOGE(TAG, "Uploaded file not sertificate. (%s:%u)", __FILE__, __LINE__);
+        WM_LOGE(TAG, "Uploaded file not certificate. (%s:%u)", __FILE__, __LINE__);
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Uploaded file not sertificate.");
         return ESP_FAIL;
     }
@@ -869,6 +869,9 @@ static esp_err_t webserver_update(httpd_req_t *req) {
     char buf[OTA_BUF_LEN];
     char *err;
 
+    esp_image_header_t          *image_header = NULL;
+    esp_app_desc_t              *app_desc = NULL;
+
     dontSleep = true;
 
     global_cont_len = req->content_len;
@@ -892,13 +895,25 @@ static esp_err_t webserver_update(httpd_req_t *req) {
                 if (len) {
                     if (begin) {
                         begin = false;
-                        if (buf[0] != 233) {
+                        image_header = (esp_image_header_t*)buf;
+                        app_desc = (esp_app_desc_t*)(buf +
+                                    sizeof(esp_image_header_t) +
+                                    sizeof(esp_image_segment_header_t));
+                        if (image_header->magic != ESP_IMAGE_HEADER_MAGIC ||
+                            app_desc->magic_word != ESP_APP_DESC_MAGIC_WORD) {
                             err = "Invalid flash image type";
                             WM_LOGE(TAG, err);
                             httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, err);
                             dontSleep = false;
                             return ESP_FAIL;
                         }
+                        char *filename = strrchr(req->uri, DELIM_CHR);
+                        if (filename) {
+                            PRINT("Uploading image file \"%s\"\n", filename+1);
+                        }
+                        PRINT("Image project name \"%s\"\n", app_desc->project_name);
+                        PRINT("Compiled %s %s\n", app_desc->time, app_desc->date);
+                        PRINT("IDF version %s\n", app_desc->idf_ver);
                         PRINT("Writing to partition name \"%s\" subtype %d at offset 0x%x\n",
                               partition->label, partition->subtype, partition->address);
                         PRINT("Please wait");
