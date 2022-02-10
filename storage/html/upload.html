@@ -42,15 +42,17 @@ div#main {
 <body>
 <div id="main">
 <p>Please upload firmware image *.bin file<p>
-<input id="newbinfile" type="file" onchange="setpath(this)">
+<input id="newbinfile" type="file" onchange="setFileName(this)">
 <button id="uploadbin" type="button" onclick="upload(this)">Update</button>
 <p>Please upload certificate for MQTT *.pem file<p>
-<input id="newcertfile" type="file" onchange="setpath(this)">
+<input id="newcertfile" type="file" onchange="setFileName(this)">
 <button id="uploadcert" type="button" onclick="upload(this)">Upload cert file</button>
 <p>Please upload html file<p>
-<input id="newhtmlfile" type="file" onchange="setpath(this)">
+<input id="newhtmlfile" type="file" onchange="setFileName(this)">
 <button id="uploadhtml" type="button" onclick="upload(this)">Upload</button>
 <p><a href="/config.html">Return to Config</a></p>
+<br /><br />
+<span id="uploading"></span>
 </div>
 <script src="/scripts.js "></script>
 </body>
