@@ -668,7 +668,7 @@ static esp_err_t webserver_response(httpd_req_t *req) {
 
 static esp_err_t webserver_update_cert_mqtt(httpd_req_t *req) {
 
-    char *buff = NULL;
+    char *name, *buff = NULL;
 
     dontSleep = true;
 
@@ -711,11 +711,15 @@ static esp_err_t webserver_update_cert_mqtt(httpd_req_t *req) {
         return ESP_FAIL;
     }
 
-    dontSleep = false;
+
+    name = strrchr (req->uri, DELIM_CHR);
+    if (name) name++;
+    sprintf(buff, "New certificate MQTT `%s` %d bytes uploaded successfully.", name?name:req->uri, len);
+    httpd_resp_sendstr(req, buff);
+
     free(buff);
 
-    httpd_resp_sendstr(req, "<a>Success. New certificate MQTT is loaded</a><br/><br/><a href=\"/upload.html\">Return</a>");
-
+    dontSleep = false;
     return ESP_OK;
 }
 
@@ -726,7 +730,7 @@ static esp_err_t webserver_upload_html(httpd_req_t *req, const char *full_name) 
     FILE *fp = NULL;
     size_t global_cont_len, recorded_len = 0;
     int received;
-    char *tmpname, *newname;
+    char *tmpname, *newname, *name;
     char buf[MAX_BUFF_RW];
 
     dontSleep = true;
@@ -834,9 +838,6 @@ static esp_err_t webserver_upload_html(httpd_req_t *req, const char *full_name) 
 
     fclose(fp);
 
-    sprintf(buf, "<a>Success. File uploaded.</a><br/><br/><a href=\"/upload.html\">Return</a>");
-    httpd_resp_sendstr(req, buf);
-
     struct stat st;
     if (stat(newname, &st) == 0) {
         unlink(newname);
@@ -850,6 +851,10 @@ static esp_err_t webserver_upload_html(httpd_req_t *req, const char *full_name) 
         return ESP_FAIL;
     }
 
+    name = strrchr (full_name, DELIM_CHR);
+    if (name) name++;
+    sprintf(buf, "File `%s` %d bytes uploaded successfully.", name?name:full_name, recorded_len);
+    httpd_resp_sendstr(req, buf);
     free(tmpname);
     free(newname);
 
@@ -867,7 +872,8 @@ static esp_err_t webserver_update(httpd_req_t *req) {
     size_t global_recv_len = 0;
 
     char buf[OTA_BUF_LEN];
-    char *err;
+    char *err = "Unknown error";
+    char *name;
 
     esp_image_header_t          *image_header = NULL;
     esp_app_desc_t              *app_desc = NULL;
@@ -881,8 +887,8 @@ static esp_err_t webserver_update(httpd_req_t *req) {
     if (partition) {
         if (partition->size < req->content_len) {
             err = "Firmware image too large";
-            WM_LOGE(TAG, err);
-            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, err);
+            ESP_LOGE(TAG, "%s. (%s:%u)", err, __FILE__, __LINE__);
+            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, err);
             dontSleep = false;
             return ESP_FAIL;
         }
@@ -902,27 +908,44 @@ static esp_err_t webserver_update(httpd_req_t *req) {
                         if (image_header->magic != ESP_IMAGE_HEADER_MAGIC ||
                             app_desc->magic_word != ESP_APP_DESC_MAGIC_WORD) {
                             err = "Invalid flash image type";
-                            WM_LOGE(TAG, err);
-                            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, err);
+                            ESP_LOGE(TAG, "%s. (%s:%u)", err, __FILE__, __LINE__);
+                            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, err);
                             dontSleep = false;
                             return ESP_FAIL;
                         }
-                        char *filename = strrchr(req->uri, DELIM_CHR);
-                        if (filename) {
-                            PRINT("Uploading image file \"%s\"\n", filename+1);
-                        }
-                        PRINT("Image project name \"%s\"\n", app_desc->project_name);
-                        PRINT("Compiled %s %s\n", app_desc->time, app_desc->date);
-                        PRINT("IDF version %s\n", app_desc->idf_ver);
-                        PRINT("Writing to partition name \"%s\" subtype %d at offset 0x%x\n",
+                        name = strrchr(req->uri, DELIM_CHR);
+                        if (name) name++;
+                        printf("Uploading image file \"%s\"\n", name?name:req->uri);
+                        printf("Image project name \"%s\"\n", app_desc->project_name);
+                        printf("Compiled %s %s\n", app_desc->time, app_desc->date);
+                        printf("IDF version %s\n", app_desc->idf_ver);
+                        printf("Writing to partition name \"%s\" subtype %d at offset 0x%x\n",
                               partition->label, partition->subtype, partition->address);
-                        PRINT("Please wait");
+                        printf("Please wait\n");
                         vTaskDelay(1000 / portTICK_PERIOD_MS);
                     }
                     ret = esp_ota_write(ota_handle, (void*)buf, len);
                     if (ret != ESP_OK) {
-                        err = "esp_ota_write() return error";
-                        WM_LOGE(TAG, err);
+                        switch (ret) {
+                            case ESP_ERR_INVALID_ARG:
+                                err = "Handle is invalid";
+                                break;
+                            case ESP_ERR_OTA_VALIDATE_FAILED:
+                                err = "First byte of image contains invalid app image magic byte";
+                                break;
+                            case ESP_ERR_FLASH_OP_TIMEOUT:
+                            case ESP_ERR_FLASH_OP_FAIL:
+                                err = "Flash write failed";
+                                break;
+                            case ESP_ERR_OTA_SELECT_INFO_INVALID:
+                                err = "OTA data partition has invalid contents";
+                                break;
+                            default:
+                                err = "Unknown error";
+                                break;
+                        }
+
+                        ESP_LOGE(TAG, "OTA write return error. %s. (%s:%d)", err, __FILE__, __LINE__);
                         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, err);
                         dontSleep = false;
                         return ESP_FAIL;
@@ -933,13 +956,26 @@ static esp_err_t webserver_update(httpd_req_t *req) {
                     fflush(stdout);
                 }
             }
-            PRINT("\n");
-            PRINT("Binary transferred finished: %d bytes\n", global_recv_len);
+            printf("\n");
+            printf("Binary transferred finished: %d bytes\n", global_recv_len);
 
             ret = esp_ota_end(ota_handle);
             if (ret != ESP_OK) {
-                err = "esp_ota_end() return error";
-                WM_LOGE(TAG, err);
+                switch (ret) {
+                    case ESP_ERR_NOT_FOUND:
+                        err = "OTA handle was not found";
+                        break;
+                    case ESP_ERR_INVALID_ARG:
+                        err = "Handle was never written to";
+                        break;
+                    case ESP_ERR_OTA_VALIDATE_FAILED:
+                        err = "OTA image is invalid";
+                        break;
+                    case ESP_ERR_INVALID_STATE:
+                        err = "Internal error writing the final encrypted bytes to flash";
+                }
+
+                ESP_LOGE(TAG, "OTA end return error. %s. (%s:%d)", err, __FILE__, __LINE__);
                 httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, err);
                 dontSleep = false;
                 return ESP_FAIL;
@@ -947,48 +983,76 @@ static esp_err_t webserver_update(httpd_req_t *req) {
             ret = esp_ota_set_boot_partition(partition);
             if (ret != ESP_OK) {
                 err = "Set boot partition is error";
-                WM_LOGE(TAG, err);
+                ESP_LOGE(TAG, "%s. (%s:%u)", err, __FILE__, __LINE__);
                 httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, err);
                 dontSleep = false;
                 return ESP_FAIL;
             }
-            sprintf(buf,
-                    "<a>Success. Next boot partition is %s. Restart system...</a><br/><br/><a href=\"javascript:history.go(-1)\">Return</a>",
-                    partition->label);
-            httpd_resp_sendstr(req, buf);
 
-            mqtt_stop();
-            esp_wifi_disconnect();
+            name = strrchr (req->uri, DELIM_CHR);
+
+            if (name) name++;
+
+            sprintf(buf, "File `%s` %d bytes uploaded successfully.\nNext boot partition is %s.\nRestart system...", name?name:req->uri, global_recv_len, partition->label);
+            httpd_resp_send(req, buf, strlen(buf));
+
+            xTaskCreate(&reboot_task, "reboot_task", 2048, NULL, 0, NULL);
+
+//            esp_wifi_disconnect();
 
             const esp_partition_t *boot_partition = esp_ota_get_boot_partition();
-            PRINT("Next boot partition \"%s\" name subtype %d at offset 0x%x\n",
+            printf("Next boot partition \"%s\" name subtype %d at offset 0x%x\n",
                   boot_partition->label, boot_partition->subtype, boot_partition->address);
-            PRINT("Prepare to restart system!\n");
-            PRINT("Rebooting...\n");
+            printf("Prepare to restart system!\n");
+            printf("Rebooting...\n");
 
-            esp_restart();
-            for(;;);
 
         } else {
-            err = "Partition error";
-            WM_LOGE(TAG, err);
+
+            switch (ret) {
+                case ESP_ERR_INVALID_ARG:
+                    err = "Partition or out_handle arguments were NULL, or not OTA app partition";
+                    break;
+                case ESP_ERR_NO_MEM:
+                    err = "Cannot allocate memory for OTA operation";
+                    break;
+                case ESP_ERR_OTA_PARTITION_CONFLICT:
+                    err = "Partition holds the currently running firmware, cannot update in place";
+                    break;
+                case ESP_ERR_NOT_FOUND:
+                    err = "Partition argument not found in partition table";
+                    break;
+                case ESP_ERR_OTA_SELECT_INFO_INVALID:
+                    err = "The OTA data partition contains invalid data";
+                    break;
+                case ESP_ERR_INVALID_SIZE:
+                    err = "Partition doesn’t fit in configured flash size";
+                    break;
+                case ESP_ERR_FLASH_OP_TIMEOUT:
+                case ESP_ERR_FLASH_OP_FAIL:
+                    err = "Flash write failed";
+                    break;
+                case ESP_ERR_OTA_ROLLBACK_INVALID_STATE:
+                    err = "The running app has not confirmed state";
+                    break;
+                default:
+                    err = "Unknown error";
+                    break;
+            }
+            ESP_LOGE(TAG, "OTA begin return error. %s. (%s:%u)", err, __FILE__, __LINE__);
             httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, err);
             dontSleep = false;
             return ESP_FAIL;
-
         }
-
-
     } else {
         err = "No partiton";
-        WM_LOGE(TAG, err);
+        ESP_LOGE(TAG, "%s. (%s:%u)", err, __FILE__, __LINE__);
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, err);
         dontSleep = false;
         return ESP_FAIL;
     }
 
     dontSleep = false;
-
     return ESP_OK;
 }
 
