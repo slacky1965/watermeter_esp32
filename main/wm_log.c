@@ -69,6 +69,7 @@ bool write_to_lstack(char *str) {
         }
         sprintf(buff, "%s%s", lstack_current->str, str);
         free(lstack_current->str);
+        free(str);
         lstack_current->str = buff;
         ret = true;
         return ret;
